@@ -44,19 +44,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    Drivers/Trilobio/Src/trilo.c
-    Drivers/Trilobio/Src/toolhead_command_handlers.c
-    Drivers/Trilobio/Src/Generated/common_command_handlers_weak.c
-    Drivers/Trilobio/Src/Generated/common_message_handlers.c
-    Drivers/Trilobio/Src/Generated/toolhead_command_handlers_weak.c
-    Drivers/Trilobio/Src/Generated/toolhead_message_handlers.c
+
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
-    Drivers/Trilobio/Inc
-    Drivers/Trilobio/Inc/Generated
 )
 
 # Add project symbols (macros)

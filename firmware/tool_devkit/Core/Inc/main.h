@@ -28,11 +28,11 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h5xx_hal.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "trilo.h"
-#include "thirdparty.h"
+#include "protocol.h"
+
+
 
 /* USER CODE END Includes */
 
