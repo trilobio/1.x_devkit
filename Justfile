@@ -4,6 +4,7 @@ initialize:
     sudo cp ./raspi/initialization/can-network.service /etc/systemd/system/can-network.service
     sudo systemctl daemon-reload
     sudo systemctl enable can-network.service
+    sudo apt install can-utils
     @echo "CAN boot config installed. Reboot required before CAN interfaces will appear."
     @echo "Run: sudo reboot"
 
