@@ -74,9 +74,13 @@ def _require_bits(name: str, value: int, bit_count: int) -> None:
         raise ValueError(f"{name}={value} does not fit in {bit_count} bits")
 
 
-def open_bus(channel: str) -> can.BusABC:
-    """Open a SocketCAN bus."""
-    return can.interface.Bus(interface="socketcan", channel=channel)
+def open_bus(channel: str, *, fd: bool = True) -> can.BusABC:
+    """Open a SocketCAN bus.
+
+    For CAN-FD, python-can needs fd=True on the SocketCAN bus object,
+    matching can-elegans' use of ThreadSafeBus(..., fd=True).
+    """
+    return can.interface.Bus(interface="socketcan", channel=channel, fd=fd)
 
 
 def send_frame(
@@ -85,7 +89,7 @@ def send_frame(
     data: bytes = b"",
     *,
     is_fd: bool = True,
-    bitrate_switch: bool = True,
+    bitrate_switch: bool = False,
     timeout_s: float = 1.0,
 ) -> None:
     message = can.Message(
@@ -106,7 +110,7 @@ def send_ping(
     priority: int = 0,
     request_id: int = 0,
     is_fd: bool = True,
-    bitrate_switch: bool = True,
+    bitrate_switch: bool = False,
 ) -> None:
     """Send an empty PING command to one board."""
     can_id = TriloCanId(
@@ -135,20 +139,22 @@ def main() -> None:
         help="send as a classic CAN frame instead of CAN-FD",
     )
     parser.add_argument(
-        "--no-bitrate-switch",
+        "--bitrate-switch",
         action="store_true",
-        help="disable CAN-FD bitrate switch",
+        help="enable CAN-FD bitrate switch",
     )
     args = parser.parse_args()
 
-    with open_bus(args.channel) as bus:
+    is_fd = not args.classic
+
+    with open_bus(args.channel, fd=is_fd) as bus:
         send_ping(
             bus,
             args.board_id,
             priority=args.priority,
             request_id=args.request_id,
             is_fd=not args.classic,
-            bitrate_switch=not args.no_bitrate_switch,
+            bitrate_switch=args.bitrate_switch,
         )
 
 
