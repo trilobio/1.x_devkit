@@ -4,3 +4,10 @@
 - VS Code
   - STM32 Cube extention
 - STM32Cube MX
+
+## Setup:
+```sh
+just initialize
+sudo reboot
+just check-can
+```

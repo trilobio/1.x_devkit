@@ -1,0 +1,21 @@
+[Unit]
+Description=CAN network setup
+After=network.target
+StartLimitIntervalSec=5
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Optional: make restart/re-run idempotent
+ExecStartPre=-/usr/sbin/ip link set can0 down
+ExecStartPre=-/usr/sbin/ip link set can1 down
+
+ExecStart=/usr/sbin/ip link set can0 up type can bitrate 1000000 dbitrate 4000000 restart-ms 1000 berr-reporting on fd on
+ExecStart=/usr/sbin/ip link set can0 txqueuelen 65536
+
+ExecStart=/usr/sbin/ip link set can1 up type can bitrate 250000 dbitrate 1000000 restart-ms 1000 berr-reporting on fd on
+ExecStart=/usr/sbin/ip link set can1 txqueuelen 65536
+
+[Install]
+WantedBy=multi-user.target
