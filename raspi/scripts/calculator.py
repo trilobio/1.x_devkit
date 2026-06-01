@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Exercise the calculator commands implemented by firmware/tool_devkit/Core/Src/protocol.c.
+"""Protocol test client for firmware/tool_devkit/Core/Src/protocol.c.
 
-CAN ID layout, from most-significant bit to least-significant bit:
+This file is intentionally structured like the inverse of protocol.h/protocol.c:
 
-    Priority   Board ID   Command ID   Request ID   Error
-    2 bits     10 bits    8 bits       8 bits       1 bit
+- CanID mirrors the C CanID struct and packs/unpacks the 29-bit extended CAN ID.
+- CanFrame mirrors the C CanFrame struct and converts to/from python-can messages.
+- CommandID mirrors the C CommandID enum.
+- Request/response data classes mirror the packed C payload structs.
+- ProtocolTest defines one transmitted frame and one expected response frame.
 
-Request payloads are packed like protocol.h:
-
-    uint8_t a;
-    uint8_t b;
-
-Response payloads are:
-
-    uint8_t a;
+To add future request/response tests, define the new data struct class and add another
+ProtocolTest to build_protocol_tests().
 """
 
 from __future__ import annotations
@@ -26,8 +23,29 @@ from enum import IntEnum
 
 import can
 
+# -----------------------------------------------------------------------------
+# Constants from protocol.h
+# -----------------------------------------------------------------------------
 
-class ToolDevkitCommand(IntEnum):
+BOARD_ID = 0x101
+ALL_CALL_ID = 0x000
+
+ERROR_FLAG_SZ = 1
+REQUEST_ID_SZ = 8
+COMMAND_ID_SZ = 8
+BOARD_ID_SZ = 10
+PRIORITY_SZ = 2
+
+CANID_BITS = 29
+TOTAL_SZ = ERROR_FLAG_SZ + REQUEST_ID_SZ + COMMAND_ID_SZ + BOARD_ID_SZ + PRIORITY_SZ
+BOARD_ID_POSITION = CANID_BITS - PRIORITY_SZ - BOARD_ID_SZ
+
+MAX_FRAME_DATA_LENGTH = 64
+
+assert TOTAL_SZ == CANID_BITS
+
+
+class CommandID(IntEnum):
     PING = 0x01
     ADD_REQUEST = 0x02
     ADD_RESPONSE = 0x03
@@ -39,65 +57,240 @@ class ToolDevkitCommand(IntEnum):
     DIVIDE_RESPONSE = 0x09
 
 
-# Must match firmware/tool_devkit/Core/Inc/protocol.h.
-TOOL_DEVKIT_ID = 0x101
-PDM_1_ID = 0x102
-PDM_2_ID = 0x103
+# -----------------------------------------------------------------------------
+# CanID / CanFrame mirror protocol.h and protocol.c
+# -----------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class TriloCanId:
+class CanID:
     priority: int
     board_id: int
     command_id: int
     request_id: int
-    error: bool = False
+    error_flag: bool = False
 
-    def pack(self) -> int:
-        """Pack this ID into a 29-bit extended CAN arbitration ID."""
-        _require_bits("priority", self.priority, 2)
-        _require_bits("board_id", self.board_id, 10)
-        _require_bits("command_id", self.command_id, 8)
-        _require_bits("request_id", self.request_id, 8)
+    def as_int(self) -> int:
+        """Mirror protocol.c constructCanID()."""
+        _require_bits("priority", self.priority, PRIORITY_SZ)
+        _require_bits("board_id", self.board_id, BOARD_ID_SZ)
+        _require_bits("command_id", self.command_id, COMMAND_ID_SZ)
+        _require_bits("request_id", self.request_id, REQUEST_ID_SZ)
 
         return (
-            (self.priority << 27)
-            | (self.board_id << 17)
-            | (self.command_id << 9)
-            | (self.request_id << 1)
-            | int(self.error)
+            (
+                (self.priority & _width_mask(PRIORITY_SZ))
+                << (BOARD_ID_POSITION + BOARD_ID_SZ)
+            )
+            | ((self.board_id & _width_mask(BOARD_ID_SZ)) << BOARD_ID_POSITION)
+            | (
+                (self.command_id & _width_mask(COMMAND_ID_SZ))
+                << (REQUEST_ID_SZ + ERROR_FLAG_SZ)
+            )
+            | ((self.request_id & _width_mask(REQUEST_ID_SZ)) << ERROR_FLAG_SZ)
+            | (int(self.error_flag) & _width_mask(ERROR_FLAG_SZ))
         )
 
     @classmethod
-    def unpack(cls, arbitration_id: int) -> "TriloCanId":
-        """Decode a 29-bit extended ID into fields."""
-        _require_bits("arbitration_id", arbitration_id, 29)
+    def parse(cls, can_id: int) -> "CanID":
+        """Mirror protocol.c parseCanID()."""
+        _require_bits("can_id", can_id, CANID_BITS)
 
         return cls(
-            priority=(arbitration_id >> 27) & 0b11,
-            board_id=(arbitration_id >> 17) & 0x3FF,
-            command_id=(arbitration_id >> 9) & 0xFF,
-            request_id=(arbitration_id >> 1) & 0xFF,
-            error=bool(arbitration_id & 0b1),
+            priority=(can_id >> (BOARD_ID_POSITION + BOARD_ID_SZ))
+            & _width_mask(PRIORITY_SZ),
+            board_id=(can_id >> BOARD_ID_POSITION) & _width_mask(BOARD_ID_SZ),
+            command_id=(can_id >> (REQUEST_ID_SZ + ERROR_FLAG_SZ))
+            & _width_mask(COMMAND_ID_SZ),
+            request_id=(can_id >> ERROR_FLAG_SZ) & _width_mask(REQUEST_ID_SZ),
+            error_flag=bool(can_id & _width_mask(ERROR_FLAG_SZ)),
+        )
+
+    def describe(self) -> str:
+        command = command_name(self.command_id)
+        return (
+            f"id=0x{self.as_int():08X} priority={self.priority} board=0x{self.board_id:03X} "
+            f"command={command} request={self.request_id} error={int(self.error_flag)}"
         )
 
 
-def _require_bits(name: str, value: int, bit_count: int) -> None:
-    if value < 0 or value >= (1 << bit_count):
-        raise ValueError(f"{name}={value} does not fit in {bit_count} bits")
+@dataclass(frozen=True)
+class CanFrame:
+    id: CanID
+    data: bytes = b""
+
+    def __post_init__(self) -> None:
+        if len(self.data) > MAX_FRAME_DATA_LENGTH:
+            raise ValueError(
+                f"CAN-FD payload is {len(self.data)} bytes; max is {MAX_FRAME_DATA_LENGTH}"
+            )
+
+    @classmethod
+    def create(cls, can_id: CanID, data: bytes | bytearray = b"") -> "CanFrame":
+        """Mirror protocol.c createCanFrame()."""
+        return cls(can_id, bytes(data[:MAX_FRAME_DATA_LENGTH]))
+
+    @classmethod
+    def from_message(cls, message: can.Message) -> "CanFrame | None":
+        if (
+            not message.is_extended_id
+            or message.is_remote_frame
+            or message.is_error_frame
+        ):
+            return None
+        return cls(CanID.parse(message.arbitration_id), bytes(message.data))
+
+    def to_message(self, *, is_fd: bool, bitrate_switch: bool) -> can.Message:
+        return can.Message(
+            arbitration_id=self.id.as_int(),
+            is_extended_id=True,
+            is_fd=is_fd,
+            bitrate_switch=bitrate_switch,
+            data=self.data,
+            check=True,
+        )
+
+    def describe(self) -> str:
+        return f"{self.id.describe()} dl={len(self.data)} data={self.data.hex(' ')}"
 
 
-def _u8(value: int) -> int:
-    """Match protocol.c's uint8_t wraparound arithmetic."""
-    return value & 0xFF
+# -----------------------------------------------------------------------------
+# Packed payload structs from protocol.h
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EmptyData:
+    def pack(self) -> bytes:
+        return b""
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "EmptyData":
+        _require_length(cls.__name__, data, 0)
+        return cls()
+
+
+@dataclass(frozen=True)
+class AddRequestData:
+    a: int
+    b: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<BB", _u8(self.a), _u8(self.b))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "AddRequestData":
+        _require_length(cls.__name__, data, 2)
+        return cls(*struct.unpack("<BB", data))
+
+
+@dataclass(frozen=True)
+class AddResponseData:
+    a: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<B", _u8(self.a))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "AddResponseData":
+        _require_length(cls.__name__, data, 1)
+        return cls(*struct.unpack("<B", data))
+
+
+@dataclass(frozen=True)
+class SubtractRequestData:
+    a: int
+    b: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<BB", _u8(self.a), _u8(self.b))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "SubtractRequestData":
+        _require_length(cls.__name__, data, 2)
+        return cls(*struct.unpack("<BB", data))
+
+
+@dataclass(frozen=True)
+class SubtractResponseData:
+    a: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<B", _u8(self.a))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "SubtractResponseData":
+        _require_length(cls.__name__, data, 1)
+        return cls(*struct.unpack("<B", data))
+
+
+@dataclass(frozen=True)
+class MultiplyRequestData:
+    a: int
+    b: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<BB", _u8(self.a), _u8(self.b))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "MultiplyRequestData":
+        _require_length(cls.__name__, data, 2)
+        return cls(*struct.unpack("<BB", data))
+
+
+@dataclass(frozen=True)
+class MultiplyResponseData:
+    a: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<B", _u8(self.a))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "MultiplyResponseData":
+        _require_length(cls.__name__, data, 1)
+        return cls(*struct.unpack("<B", data))
+
+
+@dataclass(frozen=True)
+class DivideRequestData:
+    a: int
+    b: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<BB", _u8(self.a), _u8(self.b))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "DivideRequestData":
+        _require_length(cls.__name__, data, 2)
+        return cls(*struct.unpack("<BB", data))
+
+
+@dataclass(frozen=True)
+class DivideResponseData:
+    a: int
+
+    def pack(self) -> bytes:
+        return struct.pack("<B", _u8(self.a))
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "DivideResponseData":
+        _require_length(cls.__name__, data, 1)
+        return cls(*struct.unpack("<B", data))
+
+
+# -----------------------------------------------------------------------------
+# Generic protocol test harness
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProtocolTest:
+    name: str
+    send_frame: CanFrame
+    expected_response_frame: CanFrame
 
 
 def open_bus(channel: str, *, fd: bool = True) -> can.BusABC:
-    """Open a SocketCAN bus.
-
-    For CAN-FD, python-can needs fd=True on the SocketCAN bus object,
-    matching can-elegans' use of ThreadSafeBus(..., fd=True).
-    """
     return can.interface.Bus(
         interface="socketcan",
         channel=channel,
@@ -106,185 +299,88 @@ def open_bus(channel: str, *, fd: bool = True) -> can.BusABC:
     )
 
 
-def send_frame(
+def send_can_frame(
     bus: can.BusABC,
-    can_id: TriloCanId,
-    data: bytes = b"",
+    frame: CanFrame,
     *,
-    is_fd: bool = True,
-    bitrate_switch: bool = True,
+    is_fd: bool,
+    bitrate_switch: bool,
     timeout_s: float = 1.0,
 ) -> None:
-    message = can.Message(
-        arbitration_id=can_id.pack(),
-        is_extended_id=True,
-        is_fd=is_fd,
-        bitrate_switch=bitrate_switch,
-        data=data,
-        check=True,
+    """Python side equivalent of protocol.c sendCanFrame()."""
+    bus.send(
+        frame.to_message(is_fd=is_fd, bitrate_switch=bitrate_switch), timeout=timeout_s
     )
-    bus.send(message, timeout=timeout_s)
 
 
 def drain_rx(bus: can.BusABC) -> None:
-    """Discard stale frames so each test sees fresh responses."""
     while bus.recv(timeout=0.0) is not None:
         pass
 
 
-@dataclass(frozen=True)
-class CalculatorTest:
-    name: str
-    request_command: ToolDevkitCommand
-    response_command: ToolDevkitCommand
-    a: int
-    b: int
-    expected: int
-    expect_error: bool = False
-
-
-def send_calculation_request(
+def run_protocol_test(
     bus: can.BusABC,
-    test: CalculatorTest,
+    test: ProtocolTest,
     *,
-    board_id: int,
-    priority: int,
-    request_id: int,
     is_fd: bool,
     bitrate_switch: bool,
-) -> TriloCanId:
-    can_id = TriloCanId(
-        priority=priority,
-        board_id=board_id,
-        command_id=test.request_command,
-        request_id=request_id,
-        error=False,
-    )
-    data = struct.pack("<BB", _u8(test.a), _u8(test.b))
-    send_frame(bus, can_id, data, is_fd=is_fd, bitrate_switch=bitrate_switch)
-    print(
-        f"sent {test.name:<8} request_id={request_id:3d} "
-        f"{test.a} {_calculation_symbol(test)} {test.b}  "
-        f"id=0x{can_id.pack():08X} data={data.hex(' ')}"
-    )
-    return can_id
-
-
-def wait_for_calculation_response(
-    bus: can.BusABC,
-    test: CalculatorTest,
-    *,
-    board_id: int,
-    request_id: int,
     timeout_s: float,
 ) -> bool:
-    deadline = time.monotonic() + timeout_s
+    print(f"SEND {test.name}: {test.send_frame.describe()}")
+    send_can_frame(bus, test.send_frame, is_fd=is_fd, bitrate_switch=bitrate_switch)
 
+    deadline = time.monotonic() + timeout_s
     while True:
         remaining_s = deadline - time.monotonic()
         if remaining_s <= 0:
-            print(f"FAIL {test.name:<8} timed out waiting for response")
+            print(
+                f"FAIL {test.name}: timed out waiting for {test.expected_response_frame.describe()}"
+            )
             return False
 
         message = bus.recv(timeout=remaining_s)
         if message is None:
-            print(f"FAIL {test.name:<8} timed out waiting for response")
+            print(
+                f"FAIL {test.name}: timed out waiting for {test.expected_response_frame.describe()}"
+            )
             return False
 
-        if not message.is_extended_id:
+        received_frame = CanFrame.from_message(message)
+        if received_frame is None:
             continue
 
-        try:
-            response_id = TriloCanId.unpack(message.arbitration_id)
-        except ValueError:
+        if received_frame.id.request_id != test.expected_response_frame.id.request_id:
+            continue
+        if received_frame.id.board_id != test.expected_response_frame.id.board_id:
             continue
 
-        if response_id.board_id != board_id:
-            continue
-        if response_id.request_id != request_id:
-            continue
-        if response_id.command_id != test.response_command:
-            continue
+        if received_frame == test.expected_response_frame:
+            print(f"PASS {test.name}: {received_frame.describe()}")
+            return True
 
-        actual = message.data[0] if len(message.data) >= 1 else None
-        expected = _u8(test.expected)
-        error_ok = response_id.error == test.expect_error
-        value_ok = actual == expected
-        ok = error_ok and value_ok
-
-        status = "PASS" if ok else "FAIL"
-        print(
-            f"{status} {test.name:<8} response_id=0x{message.arbitration_id:08X} "
-            f"error={int(response_id.error)} expected_error={int(test.expect_error)} "
-            f"value={actual} expected={expected} data={bytes(message.data).hex(' ')}"
-        )
-        return ok
+        print(f"FAIL {test.name}: received unexpected response")
+        print(f"  expected: {test.expected_response_frame.describe()}")
+        print(f"  received: {received_frame.describe()}")
+        return False
 
 
-def run_calculator_tests(
+def run_protocol_tests(
     bus: can.BusABC,
+    tests: list[ProtocolTest],
     *,
-    board_id: int,
-    priority: int,
-    first_request_id: int,
     is_fd: bool,
     bitrate_switch: bool,
     timeout_s: float,
 ) -> bool:
-    tests = [
-        CalculatorTest(
-            name="add",
-            request_command=ToolDevkitCommand.ADD_REQUEST,
-            response_command=ToolDevkitCommand.ADD_RESPONSE,
-            a=11,
-            b=22,
-            expected=11 + 22,
-        ),
-        CalculatorTest(
-            name="subtract",
-            request_command=ToolDevkitCommand.SUBTRACT_REQUEST,
-            response_command=ToolDevkitCommand.SUBTRACT_RESPONSE,
-            a=50,
-            b=8,
-            expected=50 - 8,
-        ),
-        CalculatorTest(
-            name="multiply",
-            request_command=ToolDevkitCommand.MULTIPLY_REQUEST,
-            response_command=ToolDevkitCommand.MULTIPLY_RESPONSE,
-            a=9,
-            b=7,
-            expected=9 * 7,
-        ),
-        CalculatorTest(
-            name="divide",
-            request_command=ToolDevkitCommand.DIVIDE_REQUEST,
-            response_command=ToolDevkitCommand.DIVIDE_RESPONSE,
-            a=84,
-            b=6,
-            expected=84 // 6,
-        ),
-    ]
-
     all_ok = True
     drain_rx(bus)
 
-    for offset, test in enumerate(tests):
-        request_id = _u8(first_request_id + offset)
-        send_calculation_request(
+    for test in tests:
+        ok = run_protocol_test(
             bus,
             test,
-            board_id=board_id,
-            priority=priority,
-            request_id=request_id,
             is_fd=is_fd,
             bitrate_switch=bitrate_switch,
-        )
-        ok = wait_for_calculation_response(
-            bus,
-            test,
-            board_id=board_id,
-            request_id=request_id,
             timeout_s=timeout_s,
         )
         all_ok = all_ok and ok
@@ -292,21 +388,119 @@ def run_calculator_tests(
     return all_ok
 
 
-def _calculation_symbol(test: CalculatorTest) -> str:
-    return {
-        "add": "+",
-        "subtract": "-",
-        "multiply": "*",
-        "divide": "/",
-    }[test.name]
+# -----------------------------------------------------------------------------
+# Manual test definitions
+# -----------------------------------------------------------------------------
+
+
+def build_protocol_tests(
+    *, board_id: int, priority: int, first_request_id: int
+) -> list[ProtocolTest]:
+    """Manually define send frames and expected response frames.
+
+    This is the part to extend when protocol.h/protocol.c gains more messages.
+    """
+
+    def can_id(
+        command_id: CommandID, request_offset: int, *, error: bool = False
+    ) -> CanID:
+        return CanID(
+            priority=priority,
+            board_id=board_id,
+            command_id=command_id,
+            request_id=_u8(first_request_id + request_offset),
+            error_flag=error,
+        )
+
+    return [
+        ProtocolTest(
+            name="add",
+            send_frame=CanFrame.create(
+                can_id(CommandID.ADD_REQUEST, 0),
+                AddRequestData(a=11, b=22).pack(),
+            ),
+            expected_response_frame=CanFrame.create(
+                can_id(CommandID.ADD_RESPONSE, 0),
+                AddResponseData(a=33).pack(),
+            ),
+        ),
+        ProtocolTest(
+            name="subtract",
+            send_frame=CanFrame.create(
+                can_id(CommandID.SUBTRACT_REQUEST, 1),
+                SubtractRequestData(a=50, b=8).pack(),
+            ),
+            expected_response_frame=CanFrame.create(
+                can_id(CommandID.SUBTRACT_RESPONSE, 1),
+                SubtractResponseData(a=42).pack(),
+            ),
+        ),
+        ProtocolTest(
+            name="multiply",
+            send_frame=CanFrame.create(
+                can_id(CommandID.MULTIPLY_REQUEST, 2),
+                MultiplyRequestData(a=9, b=7).pack(),
+            ),
+            expected_response_frame=CanFrame.create(
+                can_id(CommandID.MULTIPLY_RESPONSE, 2),
+                MultiplyResponseData(a=63).pack(),
+            ),
+        ),
+        ProtocolTest(
+            name="divide",
+            send_frame=CanFrame.create(
+                can_id(CommandID.DIVIDE_REQUEST, 3),
+                DivideRequestData(a=84, b=6).pack(),
+            ),
+            expected_response_frame=CanFrame.create(
+                can_id(CommandID.DIVIDE_RESPONSE, 3),
+                DivideResponseData(a=14).pack(),
+            ),
+        ),
+    ]
+
+
+# -----------------------------------------------------------------------------
+# Small helpers
+# -----------------------------------------------------------------------------
+
+
+def command_name(command_id: int) -> str:
+    try:
+        return CommandID(command_id).name
+    except ValueError:
+        return f"UNKNOWN_0x{command_id:02X}"
+
+
+def _width_mask(width: int) -> int:
+    return (1 << width) - 1
+
+
+def _require_bits(name: str, value: int, bit_count: int) -> None:
+    if value < 0 or value >= (1 << bit_count):
+        raise ValueError(f"{name}={value} does not fit in {bit_count} bits")
+
+
+def _require_length(name: str, data: bytes, expected_length: int) -> None:
+    if len(data) != expected_length:
+        raise ValueError(f"{name} requires {expected_length} bytes, got {len(data)}")
+
+
+def _u8(value: int) -> int:
+    return value & 0xFF
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Send ADD/SUBTRACT/MULTIPLY/DIVIDE CAN-FD requests and verify responses"
+        description="Send protocol request frames and verify exact expected response frames"
     )
     parser.add_argument(
-        "board_id", type=lambda value: int(value, 0), nargs="?", default=TOOL_DEVKIT_ID
+        "board_id", type=lambda value: int(value, 0), nargs="?", default=BOARD_ID
     )
     parser.add_argument("--channel", default="can1")
     parser.add_argument("--priority", type=int, default=0)
@@ -330,13 +524,16 @@ def main() -> None:
 
     is_fd = not args.classic
     bitrate_switch = is_fd and not args.no_bitrate_switch
+    tests = build_protocol_tests(
+        board_id=args.board_id,
+        priority=args.priority,
+        first_request_id=args.request_id,
+    )
 
     with open_bus(args.channel, fd=is_fd) as bus:
-        all_ok = run_calculator_tests(
+        all_ok = run_protocol_tests(
             bus,
-            board_id=args.board_id,
-            priority=args.priority,
-            first_request_id=args.request_id,
+            tests,
             is_fd=is_fd,
             bitrate_switch=bitrate_switch,
             timeout_s=args.timeout,

@@ -63,6 +63,8 @@ void Error_Handler(void);
 #define STBY_GPIO_Port GPIOA
 #define TRILO_CAN_TX_Pin GPIO_PIN_13
 #define TRILO_CAN_TX_GPIO_Port GPIOB
+#define POWER_REQ_Pin GPIO_PIN_14
+#define POWER_REQ_GPIO_Port GPIOB
 #define TRILO_CAN_RX_Pin GPIO_PIN_5
 #define TRILO_CAN_RX_GPIO_Port GPIOB
 

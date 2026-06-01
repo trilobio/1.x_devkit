@@ -94,7 +94,20 @@ int main(void)
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
   CanCommsInit();
-  
+  HAL_Delay(100); // Short delay to ensure CAN peripheral is ready before sending
+
+
+  CanID ping_id = {
+      .priority = 0,
+      .board_id = BOARD_ID,
+      .command_id = PING,
+      .request_id = 0,
+      .error_flag = false
+  };
+  CanFrame ping_frame = createCanFrame(ping_id, NULL, 0);
+  sendCanFrame(&ping_frame);
+  sendCanFrame(&ping_frame);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

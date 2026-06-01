@@ -30,6 +30,8 @@ class ToolDevkitCommand(IntEnum):
 TOOL_DEVKIT_ID = 101
 PDM_1_ID = 102
 PDM_2_ID = 103
+PDS_1_ID = 202
+PDS_2_ID = 203
 
 
 @dataclass(frozen=True)
