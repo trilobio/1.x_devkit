@@ -84,13 +84,17 @@ def send_frame(
     can_id: TriloCanId,
     data: bytes = b"",
     *,
+    is_fd: bool = True,
+    bitrate_switch: bool = True,
     timeout_s: float = 1.0,
 ) -> None:
     message = can.Message(
         arbitration_id=can_id.pack(),
         is_extended_id=True,
-        is_fd=True,
+        is_fd=is_fd,
+        bitrate_switch=bitrate_switch,
         data=data,
+        check=True,
     )
     bus.send(message, timeout=timeout_s)
 
@@ -101,6 +105,8 @@ def send_ping(
     *,
     priority: int = 0,
     request_id: int = 0,
+    is_fd: bool = True,
+    bitrate_switch: bool = True,
 ) -> None:
     """Send an empty PING command to one board."""
     can_id = TriloCanId(
@@ -110,8 +116,11 @@ def send_ping(
         request_id=request_id,
         error=False,
     )
-    send_frame(bus, can_id)
-    print(f"sent PING to board {board_id} with CAN ID 0x{can_id.pack():08X}")
+    send_frame(bus, can_id, is_fd=is_fd, bitrate_switch=bitrate_switch)
+    frame_type = "CAN-FD" if is_fd else "classic CAN"
+    print(
+        f"sent {frame_type} PING to board {board_id} with CAN ID 0x{can_id.pack():08X}"
+    )
 
 
 def main() -> None:
@@ -120,6 +129,16 @@ def main() -> None:
     parser.add_argument("--channel", default="can1")
     parser.add_argument("--priority", type=int, default=0)
     parser.add_argument("--request-id", type=int, default=0)
+    parser.add_argument(
+        "--classic",
+        action="store_true",
+        help="send as a classic CAN frame instead of CAN-FD",
+    )
+    parser.add_argument(
+        "--no-bitrate-switch",
+        action="store_true",
+        help="disable CAN-FD bitrate switch",
+    )
     args = parser.parse_args()
 
     with open_bus(args.channel) as bus:
@@ -128,6 +147,8 @@ def main() -> None:
             args.board_id,
             priority=args.priority,
             request_id=args.request_id,
+            is_fd=not args.classic,
+            bitrate_switch=not args.no_bitrate_switch,
         )
 
 
