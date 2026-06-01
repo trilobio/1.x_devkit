@@ -28,6 +28,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h5xx_hal.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "protocol.h"
@@ -63,6 +64,8 @@ void Error_Handler(void);
 #define STBY_GPIO_Port GPIOA
 #define TRILO_CAN_TX_Pin GPIO_PIN_13
 #define TRILO_CAN_TX_GPIO_Port GPIOB
+#define POWER_REQ_Pin GPIO_PIN_14
+#define POWER_REQ_GPIO_Port GPIOB
 #define TRILO_CAN_RX_Pin GPIO_PIN_5
 #define TRILO_CAN_RX_GPIO_Port GPIOB
 
