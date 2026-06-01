@@ -1,0 +1,43 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "stlinkgdbtarget",
+            "request": "launch",
+            "name": "Flash & Debug (ST-Link)",
+            "cwd": "${workspaceFolder}",
+            "program": "${command:cmake.launchTargetPath}",
+            "deviceName": "STM32H523CE",
+            "deviceCore": "Cortex-M33",
+            "serverInterface": "SWD",
+            "runEntry": "main",
+            "imagesAndSymbols": [
+                {
+                    "imageFileName": "${command:cmake.launchTargetPath}",
+                    "symbolFileName": "${command:cmake.launchTargetPath}"
+                }
+            ],
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": "20"
+            },
+            "osx": {
+                "svdPath":
+                    "${userHome}/Library/Application Support/stm32cube/packs/STMicroelectronics/stm32h5xx_dfp/1.2.0/SVD/STM32H523.svd",
+                "serverCubeProgPath":
+                    "${userHome}/Library/Application Support/stm32cube/bundles/programmer/2.22.0+st.1/bin",
+                "serverGdbserverPath": "/opt/ST/STM32CubeCLT_1.21.0/STLink-gdb-server/bin",
+                "gdbPath": "/opt/homebrew/bin/arm-none-eabi-gdb"
+            },
+            "linux": {
+                "svdPath":
+                    "/opt/st/stm32cubeclt/packs/STMicroelectronics/stm32h5xx_dfp/1.2.0/SVD/STM32H523.svd",
+                "serverCubeProgPath": "/opt/st/stm32cubeclt/bundles/programmer/2.22.0+st.1/bin",
+                "serverGdbserverPath":
+                    "/opt/st/stm32cubeclt/bundles/stlink-gdbserver/7.13.0+st.3/bin",
+                "gdbPath":
+                    "/opt/st/stm32cubeclt/bundles/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gdb"
+            }
+        }
+    ]
+}

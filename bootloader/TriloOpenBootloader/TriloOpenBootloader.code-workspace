@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+        "cmake.cmakePath": "cube-cmake",
+        "cmake.configureArgs": [
+            "-DCMAKE_COMMAND=cube-cmake"
+        ],
+        "stm32cube-ide-clangd.path": "cube",
+        "stm32cube-ide-clangd.enableFormatting": true,
+        "stm32cube-ide-clangd.arguments": [
+            "starm-clangd",
+            "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc*",
+            "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++*"
+        ],
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
+        "editor.defaultFormatter": "STMicroelectronics.stm32cube-ide-clangd",
+        "[c]": {
+            "editor.defaultFormatter": "STMicroelectronics.stm32cube-ide-clangd"
+        },
+        "[cpp]": {
+            "editor.defaultFormatter": "STMicroelectronics.stm32cube-ide-clangd"
+        },
+        "editor.wordWrap": "off",
+        "editor.formatOnSave": true
+    }
+}
