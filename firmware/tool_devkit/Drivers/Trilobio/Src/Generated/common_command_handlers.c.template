@@ -1,0 +1,9 @@
+#include "common_command_handlers.h"
+
+void TriloCommon_HandlePing(void) {
+    /* Implement ping handling here. */
+}
+
+void TriloCommon_HandleVersion(void) {
+    /* Implement version handling here. */
+}

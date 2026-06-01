@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "stlinkgdbtarget",
+            "request": "launch",
+            "name": "Flash & Debug (ST-Link)",
+            "cwd": "${workspaceFolder}",
+            "program": "${command:cmake.launchTargetPath}",
+            "deviceName": "STM32H523CE",
+            "deviceCore": "Cortex-M33",
+            "serverInterface": "SWD",
+            "runEntry": "main",
+            "svdPath": "${env:STM32_SVD_FILE}",
+            "serverCubeProgPath": "${env:STM32_CUBEPROG_DIR}",
+            "serverGdbserverPath": "${env:STM32_GDBSERVER_DIR}",
+            "gdbPath": "${env:STM32_GDB_PATH}",
+            "imagesAndSymbols": [
+                {
+                    "imageFileName": "${command:cmake.launchTargetPath}",
+                    "symbolFileName": "${command:cmake.launchTargetPath}"
+                }
+            ],
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": "20"
+            }
+        }
+    ]
+}
