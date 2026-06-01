@@ -9,5 +9,8 @@
 ```sh
 just initialize
 sudo reboot
+```
+After reboot:
+```sh
 just check-can
 ```
