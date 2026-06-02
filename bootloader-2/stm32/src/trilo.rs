@@ -76,12 +76,17 @@ impl TriloCanId {
     pub const ERR_BIT_MASK: u8 = 0x01;
     pub const RAW_ID_MASK: u32 = (1 << Self::SIZE_BITS) - 1;
 
-    const PRIORITY_SHIFT: usize =
+    pub const PRIORITY_SHIFT: usize =
         Self::BOARD_ID_BITS + Self::COMMAND_ID_BITS + Self::REQUEST_ID_BITS + Self::ERR_BIT_BITS;
-    const BOARD_ID_SHIFT: usize =
+    pub const BOARD_ID_SHIFT: usize =
         Self::COMMAND_ID_BITS + Self::REQUEST_ID_BITS + Self::ERR_BIT_BITS;
-    const COMMAND_ID_SHIFT: usize = Self::REQUEST_ID_BITS + Self::ERR_BIT_BITS;
-    const REQUEST_ID_SHIFT: usize = Self::ERR_BIT_BITS;
+    pub const COMMAND_ID_SHIFT: usize = Self::REQUEST_ID_BITS + Self::ERR_BIT_BITS;
+    pub const REQUEST_ID_SHIFT: usize = Self::ERR_BIT_BITS;
+    pub const BOARD_ID_FILTER_MASK: u32 = (Self::BOARD_ID_MASK as u32) << Self::BOARD_ID_SHIFT;
+
+    pub const fn board_id_filter_bits(board_id: BoardId) -> u32 {
+        (board_id as u32) << Self::BOARD_ID_SHIFT
+    }
 
     pub const fn new(
         priority: Priority,

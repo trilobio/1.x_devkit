@@ -19,7 +19,7 @@ init-cmake:
     cd firmware/powered_deck_slot_devkit && cmake --preset Debug
 
 build-firmware-binaries:
-    mkdir -p ../bootloader-2/raspi/binaries
+    mkdir -p bootloader-2/raspi/binaries
     cd firmware/tool_devkit && cmake --build --preset Debug
     cd firmware/powered_deck_module_devkit && cmake --build --preset Debug
     cd firmware/powered_deck_slot_devkit && cmake --build --preset Debug

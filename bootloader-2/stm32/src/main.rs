@@ -30,7 +30,6 @@ unsafe fn jump_to_app() -> ! {
 
         cortex_m::interrupt::disable();
 
-        // Disable SysTick
         p.SYST.disable_counter();
         p.SYST.disable_interrupt();
 
@@ -39,17 +38,12 @@ unsafe fn jump_to_app() -> ! {
             p.NVIC.icpr[i].write(0xFFFF_FFFF);
         }
 
-        let rcc = embassy_stm32::pac::RCC;
-        rcc.cr().modify(|w| w.set_hsion(true));
-        while !rcc.cr().read().hsirdy() {}
-        rcc.cfgr()
-            .modify(|w| w.set_sw(embassy_stm32::pac::rcc::vals::Sw::HSI));
-        while rcc.cfgr().read().sws() != embassy_stm32::pac::rcc::vals::Sw::HSI {}
-        rcc.cr().modify(|w| w.set_pllon(0, false));
-
         p.SCB.invalidate_icache();
         p.SCB.vtor.write(0x0800_8000);
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
 
+        cortex_m::interrupt::enable();
         cortex_m::asm::bootload(0x0800_8000 as *const u32);
     }
 }
@@ -86,26 +80,23 @@ async fn main(_spawner: Spawner) {
         _ => {}
     }
 
-    let board_id_shift =
-        TriloCanId::COMMAND_ID_BITS + TriloCanId::REQUEST_ID_BITS + TriloCanId::ERR_BIT_BITS;
-    let board_id_mask = (TriloCanId::BOARD_ID_MASK as u32) << board_id_shift;
     let filter_all = ExtendedFilter {
         filter: FilterType::BitMask {
-            filter: (BoardId::AllCall as u32) << board_id_shift,
-            mask: board_id_mask,
+            filter: TriloCanId::board_id_filter_bits(BoardId::AllCall),
+            mask: TriloCanId::BOARD_ID_FILTER_MASK,
         },
         action: can::filter::Action::StoreInFifo0,
     };
     let filter_this_node = ExtendedFilter {
         filter: FilterType::BitMask {
-            filter: (THIS_NODE as u32) << board_id_shift,
-            mask: board_id_mask,
+            filter: TriloCanId::board_id_filter_bits(THIS_NODE),
+            mask: TriloCanId::BOARD_ID_FILTER_MASK,
         },
         action: can::filter::Action::StoreInFifo0,
     };
 
     let mut can =
-        can::CanConfigurator::new(peripherals.FDCAN2, peripherals.PB12, peripherals.PB13, Irqs);
+        can::CanConfigurator::new(peripherals.FDCAN2, peripherals.PB5, peripherals.PB13, Irqs);
     can.properties()
         .set_extended_filter(ExtendedFilterSlot::_0, filter_all);
     can.properties()
@@ -119,20 +110,20 @@ async fn main(_spawner: Spawner) {
         .set_tx_buffer_mode(TxBufferMode::Fifo)
         .set_nominal_bit_timing(NominalBitTiming {
             prescaler: NonZeroU16::new(1).unwrap(),
-            sync_jump_width: NonZeroU8::new(6).unwrap(),
-            seg1: NonZeroU8::new(33).unwrap(),
-            seg2: NonZeroU8::new(6).unwrap(),
+            sync_jump_width: NonZeroU8::new(10).unwrap(),
+            seg1: NonZeroU8::new(139).unwrap(),
+            seg2: NonZeroU8::new(20).unwrap(),
         })
         .set_data_bit_timing(DataBitTiming {
             transceiver_delay_compensation: true,
             prescaler: NonZeroU16::new(1).unwrap(),
-            seg1: NonZeroU8::new(5).unwrap(),
-            seg2: NonZeroU8::new(2).unwrap(),
-            sync_jump_width: NonZeroU8::new(2).unwrap(),
+            seg1: NonZeroU8::new(29).unwrap(),
+            seg2: NonZeroU8::new(10).unwrap(),
+            sync_jump_width: NonZeroU8::new(5).unwrap(),
         });
 
     can.set_config(config);
-
+    rprintln!("Initialized CAN");
     #[allow(unused_mut)]
     let mut can = can.into_normal_mode();
     let (mut tx, mut rx, _props) = can.split();
