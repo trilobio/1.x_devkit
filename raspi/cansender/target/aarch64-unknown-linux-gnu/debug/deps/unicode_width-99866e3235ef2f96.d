@@ -1,0 +1,6 @@
+/Users/trilobiointern2/trilo/1.x_devkit/raspi/cansender/target/aarch64-unknown-linux-gnu/debug/deps/unicode_width-99866e3235ef2f96.d: /Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/lib.rs /Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/tables.rs
+
+/Users/trilobiointern2/trilo/1.x_devkit/raspi/cansender/target/aarch64-unknown-linux-gnu/debug/deps/libunicode_width-99866e3235ef2f96.rmeta: /Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/lib.rs /Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/tables.rs
+
+/Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/lib.rs:
+/Users/trilobiointern2/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.2.2/src/tables.rs:
