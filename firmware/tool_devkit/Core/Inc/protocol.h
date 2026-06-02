@@ -53,6 +53,7 @@ typedef enum {
     DIVIDE_REQUEST = 0x08,
     DIVIDE_RESPONSE = 0x09,
     // Add more commands as needed
+    REBOOT = 0xFF
 } CommandID;
 
 void CanCommsInit(void);

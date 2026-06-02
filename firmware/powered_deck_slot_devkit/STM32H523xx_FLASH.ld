@@ -40,7 +40,7 @@ ENTRY(Reset_Handler)
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 270K /* Reduce this so hard faults aren't triggered on setting main stack pointer */
-  FLASH    (rx)    : ORIGIN = 0x08008000,   LENGTH = 480K /* Reduce this because some space is taken up by the bootloader */
+  FLASH    (rx)    : ORIGIN = 0x08000000,   LENGTH = 512K /* Reduce this because some space is taken up by the bootloader */
 }
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */

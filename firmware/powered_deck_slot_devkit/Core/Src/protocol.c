@@ -245,6 +245,10 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
             should_send_response = true;
             break;
         }
+        case REBOOT: {
+            NVIC_SystemReset();
+            break;
+        }
         default:
             // Handle unknown command or ignore
             break;

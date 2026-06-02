@@ -29,7 +29,20 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef enum {
+  LED1,
+  LED2,
+  LED3,
+} UserPins;
 
+typedef enum {
+  LOW,
+  HIGH
+} PinState;
+typedef struct {
+  UserPins pin;
+  PinState state;
+} UserPin;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -51,12 +64,15 @@
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
-
+void setGpio(UserPins pin, PinState state);
+void toggleGpio(UserPin pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+UserPin led1 = {LED1, LOW};
+UserPin led2 = {LED2, LOW};
+UserPin led3 = {LED3, LOW};
 /* USER CODE END 0 */
 
 /**
@@ -94,7 +110,9 @@ int main(void)
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
   CanCommsInit();
-  
+  setGpio(LED1, LOW);
+  setGpio(LED2, HIGH);
+  setGpio(LED3, LOW);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,6 +126,11 @@ int main(void)
     if (receivedCanMessage) {
         handleCanMessage();
     }
+    
+    toggleGpio(led1);
+    toggleGpio(led2);
+    toggleGpio(led3);
+    HAL_Delay(500);
     
   }
   /* USER CODE END 3 */
@@ -170,6 +193,43 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void setGpio(UserPins pin, PinState state){
+  GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+  
+  switch(pin) {
+    case LED1:
+      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, gpioState);
+      break;
+    case LED2:
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, gpioState);
+      break;
+    case LED3:
+      HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, gpioState);
+      break;
+    default:
+      // Handle invalid pin if necessary
+      break;
+  }
+}
+void toggleGpio(UserPin pin) {
+  switch(pin.pin) {
+    case LED1:
+      HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+      break;
+    case LED2:
+      HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+      break;
+    case LED3:
+      HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
+      break;
+    default:
+      // Handle invalid pin if necessary
+      break;
+  }
+  // Update the state in the UserPin struct
+  pin.state = (pin.state == HIGH) ? LOW : HIGH;
+}
 
 /* USER CODE END 4 */
 
@@ -237,5 +297,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-
