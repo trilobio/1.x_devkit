@@ -17,7 +17,7 @@ struct Args {
     #[arg(short, long)]
     binary: PathBuf,
 
-    #[arg(short, long, default_value = "can0")]
+    #[arg(short, long, default_value = "can1")]
     interface: String,
 
     /// Target board ID as hex, e.g. 0101 for ToolDevKit.

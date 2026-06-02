@@ -138,7 +138,7 @@ async fn main(_spawner: Spawner) {
         match rx.read_fd().await {
             Ok(message) => {
                 let (rx_frame, _ts) = message.parts();
-
+                rprintln!("{:?}", rx_frame.id());
                 if let Id::Extended(id) = rx_frame.id() {
                     let raw_id = id.as_raw();
                     let Ok(can_msg) = TriloCanId::from_raw_id(raw_id) else {
