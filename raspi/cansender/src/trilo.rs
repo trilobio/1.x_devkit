@@ -43,19 +43,40 @@ pub enum BoardId {
     Unknown = 0x03FF,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, AsRefStr, IntoStaticStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CommandId {
-    Ping = 0x40,
-    Erase = 0x45,
-    EraseOk = 0x46,
-    Write = 0x47,
-    WriteOk = 0x48,
-    AddressAndSize = 0x4A,
-    FirmwareUpdateQuery = 0x4B,
-    FirmwareUpdateResponse = 0x4C,
-    Reboot = 0x4D,
-    Jump = 0xAA,
+    Application(ApplicationCommandId),
+    Bootloader(BootloaderCommandId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ApplicationCommandId {
+    AppPing = 0x01,
+    AppAddRequest = 0x02,
+    AppAddResponse = 0x03,
+    AppSubtractRequest = 0x04,
+    AppSubtractResponse = 0x05,
+    AppMultiplyRequest = 0x06,
+    AppMultiplyResponse = 0x07,
+    AppDivideRequest = 0x08,
+    AppDivideResponse = 0x09,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum BootloaderCommandId {
+    BlPing = 0xF6,
+    BlErase = 0xF7,
+    BlEraseOk = 0xF8,
+    BlWrite = 0xF9,
+    BlWriteOk = 0xFA,
+    BlAddressAndSize = 0xFB,
+    BlFirmwareUpdateQuery = 0xFC,
+    BlFirmwareUpdateResponse = 0xFD,
+    BlReboot = 0xFE,
+    BlJump = 0xFF,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

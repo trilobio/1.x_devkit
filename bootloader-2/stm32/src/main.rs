@@ -15,7 +15,6 @@ use embassy_stm32::can::config::{
 };
 use embassy_stm32::peripherals::*;
 use embassy_stm32::{Config, bind_interrupts, can, can::filter::*, flash, rcc};
-use embedded_can::Id;
 use panic_probe as _;
 use rtt_target::{rprintln, rtt_init_print};
 
@@ -48,8 +47,6 @@ unsafe fn jump_to_app() -> ! {
     }
 }
 
-pub const THIS_NODE: BoardId = BoardId::ToolDevKit;
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let mut config = Config::default();
@@ -75,23 +72,10 @@ async fn main(_spawner: Spawner) {
 
     rtt_init_print!();
 
-    match THIS_NODE {
-        BoardId::ToolDevKit => rprintln!("Tool Devkit"),
-        _ => {}
-    }
+    rprintln!("Tool Devkit bootloader");
 
     let filter_all = ExtendedFilter {
-        filter: FilterType::BitMask {
-            filter: TriloCanId::board_id_filter_bits(BoardId::AllCall),
-            mask: TriloCanId::BOARD_ID_FILTER_MASK,
-        },
-        action: can::filter::Action::StoreInFifo0,
-    };
-    let filter_this_node = ExtendedFilter {
-        filter: FilterType::BitMask {
-            filter: TriloCanId::board_id_filter_bits(THIS_NODE),
-            mask: TriloCanId::BOARD_ID_FILTER_MASK,
-        },
+        filter: FilterType::BitMask { filter: 0, mask: 0 },
         action: can::filter::Action::StoreInFifo0,
     };
 
@@ -99,8 +83,6 @@ async fn main(_spawner: Spawner) {
         can::CanConfigurator::new(peripherals.FDCAN2, peripherals.PB5, peripherals.PB13, Irqs);
     can.properties()
         .set_extended_filter(ExtendedFilterSlot::_0, filter_all);
-    can.properties()
-        .set_extended_filter(ExtendedFilterSlot::_1, filter_this_node);
     let config = FdCanConfig::default()
         .set_clock_divider(ClockDivider::_1)
         .set_frame_transmit(FrameTransmissionConfig::AllowFdCanAndBRS)
@@ -139,97 +121,71 @@ async fn main(_spawner: Spawner) {
             Ok(message) => {
                 let (rx_frame, _ts) = message.parts();
                 rprintln!("{:?}", rx_frame.id());
-                if let Id::Extended(id) = rx_frame.id() {
-                    let raw_id = id.as_raw();
-                    let Ok(can_msg) = TriloCanId::from_raw_id(raw_id) else {
-                        continue;
-                    };
-                    if can_msg.board_id == THIS_NODE || can_msg.board_id == BoardId::AllCall {
-                        let data = rx_frame.data();
+                let Ok(can_msg) = TriloBootloaderMessage::try_from(&rx_frame) else {
+                    continue;
+                };
+                let data = can_msg.bl_data;
 
-                        match can_msg.command_id {
-                            CommandId::Ping => {
-                                let reply_id = TriloCanId::new(
-                                    Priority::Low,
-                                    THIS_NODE,
-                                    CommandId::Ping,
-                                    can_msg.request_id,
-                                    ErrorBit::NoError,
-                                );
-                                let tx_frame = embassy_stm32::can::frame::FdFrame::new_extended(
-                                    reply_id.to_raw_id(),
-                                    &[0u8],
-                                )
-                                .unwrap();
-                                tx.write_fd(&tx_frame).await;
-                            }
-                            CommandId::Erase => {
-                                f.blocking_erase(0x8000, 0x80000).unwrap();
-                                let reply_id = TriloCanId::new(
-                                    Priority::Low,
-                                    THIS_NODE,
-                                    CommandId::EraseOk,
-                                    can_msg.request_id,
-                                    ErrorBit::NoError,
-                                );
-                                let tx_frame = embassy_stm32::can::frame::FdFrame::new_extended(
-                                    reply_id.to_raw_id(),
-                                    &[],
-                                )
-                                .unwrap();
-                                tx.write_fd(&tx_frame).await;
-                            }
-                            CommandId::AddressAndSize => {
-                                if data.len() >= 5 {
-                                    chunk_address =
-                                        u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-                                    chunk_size = data[4];
-                                }
-                            }
-                            CommandId::Write => {
-                                if chunk_address >= 0x0800_8000 {
-                                    let offset = chunk_address - 0x0800_0000;
-
-                                    let mut write_buf = [0xFF; 64];
-
-                                    let aligned_len = (data.len() + 15) & !15;
-
-                                    if aligned_len <= 64 {
-                                        write_buf[..data.len()].copy_from_slice(data);
-
-                                        f.blocking_write(offset, &write_buf[..aligned_len])
-                                            .unwrap();
-
-                                        let mut payload = [0u8; 5];
-                                        payload[0..4].copy_from_slice(&chunk_address.to_be_bytes());
-                                        payload[4] = chunk_size;
-
-                                        let reply_id = TriloCanId::new(
-                                            Priority::Low,
-                                            THIS_NODE,
-                                            CommandId::WriteOk,
-                                            can_msg.request_id,
-                                            ErrorBit::NoError,
-                                        );
-
-                                        let tx_frame =
-                                            embassy_stm32::can::frame::FdFrame::new_extended(
-                                                reply_id.to_raw_id(),
-                                                &payload,
-                                            )
-                                            .unwrap();
-                                        tx.write_fd(&tx_frame).await;
-
-                                        chunk_address += data.len() as u32;
-                                    }
-                                }
-                            }
-                            CommandId::Jump => unsafe {
-                                jump_to_app();
-                            },
-                            _ => {}
+                match can_msg.bl_command {
+                    BootloaderCommandId::BlPing => {
+                        let reply = TriloBootloaderMessage {
+                            bl_command: BootloaderCommandId::BlPingOk,
+                            bl_data: &[0u8],
+                        };
+                        let tx_frame: embassy_stm32::can::frame::FdFrame =
+                            reply.try_into().unwrap();
+                        tx.write_fd(&tx_frame).await;
+                    }
+                    BootloaderCommandId::BlErase => {
+                        f.blocking_erase(0x8000, 0x80000).unwrap();
+                        let reply = TriloBootloaderMessage {
+                            bl_command: BootloaderCommandId::BlEraseOk,
+                            bl_data: &[],
+                        };
+                        let tx_frame: embassy_stm32::can::frame::FdFrame =
+                            reply.try_into().unwrap();
+                        tx.write_fd(&tx_frame).await;
+                    }
+                    BootloaderCommandId::BlAddressAndSize => {
+                        if data.len() >= 5 {
+                            chunk_address =
+                                u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                            chunk_size = data[4];
                         }
                     }
+                    BootloaderCommandId::BlWrite => {
+                        if chunk_address >= 0x0800_8000 {
+                            let offset = chunk_address - 0x0800_0000;
+
+                            let mut write_buf = [0xFF; 64];
+
+                            let aligned_len = (data.len() + 15) & !15;
+
+                            if aligned_len <= 64 {
+                                write_buf[..data.len()].copy_from_slice(data);
+
+                                f.blocking_write(offset, &write_buf[..aligned_len]).unwrap();
+
+                                let mut payload = [0u8; 5];
+                                payload[0..4].copy_from_slice(&chunk_address.to_be_bytes());
+                                payload[4] = chunk_size;
+
+                                let reply = TriloBootloaderMessage {
+                                    bl_command: BootloaderCommandId::BlWriteOk,
+                                    bl_data: &payload,
+                                };
+                                let tx_frame: embassy_stm32::can::frame::FdFrame =
+                                    reply.try_into().unwrap();
+                                tx.write_fd(&tx_frame).await;
+
+                                chunk_address += data.len() as u32;
+                            }
+                        }
+                    }
+                    BootloaderCommandId::BlJump => unsafe {
+                        jump_to_app();
+                    },
+                    _ => {}
                 }
             }
             Err(_e) => {}
