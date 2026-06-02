@@ -26,3 +26,11 @@ build-firmware-binaries:
     cp firmware/tool_devkit/build/Debug/tool_devkit.bin ../bootloader-2/raspi/binaries/
     cp firmware/powered_deck_module_devkit/build/Debug/pdm_devkit.bin ../bootloader-2/raspi/binaries/
     cp firmware/powered_deck_slot_devkit/build/Debug/pds_devkit.bin ../bootloader-2/raspi/binaries/
+
+clean:
+    rm -rf firmware/tool_devkit/build
+    rm -rf firmware/powered_deck_module_devkit/build
+    rm -rf firmware/powered_deck_slot_devkit/build
+    rm -rf ../bootloader-2/raspi/binaries
+
+clean-build: clean init-cmake build-firmware-binaries
