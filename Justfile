@@ -12,3 +12,12 @@ check-can:
     ip link show can0
     ip link show can1
     systemctl --no-pager status can-network.service
+
+build-firmware-binaries:
+    mkdir -p ../bootloader-2/raspi/binaries
+    cd firmware/tool_devkit && cmake --build --preset Debug
+    cd firmware/powered_deck_module_devkit && cmake --build --preset Debug
+    cd firmware/powered_deck_slot_devkit && cmake --build --preset Debug
+    cp firmware/tool_devkit/build/Debug/tool_devkit.bin ../bootloader-2/raspi/binaries/
+    cp firmware/powered_deck_module_devkit/build/Debug/pdm_devkit.bin ../bootloader-2/raspi/binaries/
+    cp firmware/powered_deck_slot_devkit/build/Debug/pds_devkit.bin ../bootloader-2/raspi/binaries/
