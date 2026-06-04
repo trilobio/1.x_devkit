@@ -1,5 +1,7 @@
 # Trilobio 1.x Developer Kit
 
+**Please see the [CAN](CAN.md) page for information on CAN message formatting and processing.**
+
 ## Repo Structure
 ```
 1.x_devkit
