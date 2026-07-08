@@ -52,6 +52,7 @@ typedef enum {
     MULTIPLY_RESPONSE = 0x07,
     DIVIDE_REQUEST = 0x08,
     DIVIDE_RESPONSE = 0x09,
+    ARB_MSG = 64,
     // Add more commands as needed
     REBOOT = 0xFF
 } CommandID;

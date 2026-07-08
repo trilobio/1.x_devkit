@@ -68,6 +68,8 @@ void Error_Handler(void);
 #define LED3_GPIO_Port GPIOC
 #define STBY_Pin GPIO_PIN_5
 #define STBY_GPIO_Port GPIOA
+#define VOUT_PG_Pin GPIO_PIN_12
+#define VOUT_PG_GPIO_Port GPIOB
 #define TRILO_CAN_TX_Pin GPIO_PIN_13
 #define TRILO_CAN_TX_GPIO_Port GPIOB
 #define POWER_REQ_Pin GPIO_PIN_14
