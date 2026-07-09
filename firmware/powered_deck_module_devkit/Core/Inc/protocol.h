@@ -28,6 +28,8 @@ extern "C" {
 #define BOARD_ID_POSITION (CANID_BITS - PRIORITY_SZ - BOARD_ID_SZ)
 
 extern volatile bool receivedCanMessage; // True if CAN message received
+extern uint8_t incoming_data[64]; // Buffer to store incoming data
+extern bool processed_incoming_data; // False when incoming_data holds a fresh, unhandled message
 
 typedef struct {
     uint8_t priority;
@@ -43,18 +45,9 @@ typedef struct {
 } CanFrame;
 
 typedef enum {
-    PING = 0x01,
-    ADD_REQUEST = 0x02,
-    ADD_RESPONSE = 0x03,
-    SUBTRACT_REQUEST = 0x04,
-    SUBTRACT_RESPONSE = 0x05,
-    MULTIPLY_REQUEST = 0x06,
-    MULTIPLY_RESPONSE = 0x07,
-    DIVIDE_REQUEST = 0x08,
-    DIVIDE_RESPONSE = 0x09,
-    ARB_MSG = 64,
-    // Add more commands as needed
-    REBOOT = 0xFF
+    PING = 2,
+    ARB_MSG_REQUEST = 63,
+    ARB_MSG_RESPONSE = 65,
 } CommandID;
 
 void CanCommsInit(void);
@@ -72,63 +65,12 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
                                                 │
 */
 typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} AddRequestData;
+    uint8_t data[64];
+} ArbitraryMsgRequestData;
 
 typedef struct __attribute__((packed)) {
-    uint8_t a;
-} AddResponseData;
-
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} SubtractRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} SubtractResponseData;
-
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} MultiplyRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} MultiplyResponseData;
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} DivideRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} DivideResponseData;
+    uint64_t a;
+} ArbitraryMsgResponseData;
 
 /*                                              │
 ────────────────────────────────────────────────┘

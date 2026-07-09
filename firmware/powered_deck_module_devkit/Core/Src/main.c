@@ -57,7 +57,8 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t incoming_data[64];
+bool processed_incoming_data = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,12 +127,30 @@ int main(void)
     if (receivedCanMessage) {
         handleCanMessage();
     }
-    
-    toggleGpio(led1);
-    toggleGpio(led2);
-    toggleGpio(led3);
-    HAL_Delay(500);
-    
+
+    if (!processed_incoming_data) {
+        uint8_t led_to_set = incoming_data[0]; // First byte selects which LED to set
+        uint8_t led_state = incoming_data[1];  // Second byte selects the state (0 for LOW, non-zero for HIGH)
+        switch (led_to_set) {
+            case 1:
+                setGpio(LED1, led_state ? HIGH : LOW);
+                break;
+            case 2:
+                setGpio(LED2, led_state ? HIGH : LOW);
+                break;
+            case 3:
+                setGpio(LED3, led_state ? HIGH : LOW);
+                break;
+            default:
+                // Invalid LED number, do nothing or handle error
+                break;
+        }
+        processed_incoming_data = true;
+    }
+
+    // Sleep until the next interrupt (CAN RX or SysTick) instead of busy-waiting
+    __WFI();
+
   }
   /* USER CODE END 3 */
 }

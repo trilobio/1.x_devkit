@@ -172,8 +172,66 @@ static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16
     }
 }
 
+/*
+ * Arbitrary bytes are tunneled over the float-based CAN API: the server encodes
+ * the payload as float32s and sends them as WriteEncoderCalibration (63) frames.
+ * We decode them back to raw bytes here. Mirrors internal/common/Src/can.cpp and
+ * the control-board WriteEncoderCalibration handler in the main firmware.
+ */
+#define TUNNEL_BUFFER_SIZE 64  // Matches incoming_data; longer messages are truncated
+#define TUNNEL_MAX_FLOATS_PER_FRAME 16  // 16 float32 == 64 bytes, one full CAN FD frame
+
+typedef struct {
+    bool filling;
+    uint32_t num_bytes;   // Total payload byte count (from the header's dx field)
+    uint32_t num_floats;  // Total data floats (from the header's len field), informational
+    uint32_t received;    // Payload bytes decoded so far
+    uint8_t buffer[TUNNEL_BUFFER_SIZE];
+} TunnelState;
+
+static TunnelState tunnel;
+
+static float unpackFloat(const uint8_t* buffer, size_t offset) {
+    uint32_t bits = (uint32_t)buffer[offset]
+                  | ((uint32_t)buffer[offset + 1] << 8)
+                  | ((uint32_t)buffer[offset + 2] << 16)
+                  | ((uint32_t)buffer[offset + 3] << 24);
+    float result;
+    memcpy(&result, &bits, sizeof(result));
+    return result;
+}
+
+static uint32_t unpackUint32(const uint8_t* buffer, size_t offset) {
+    return (uint32_t)buffer[offset]
+         | ((uint32_t)buffer[offset + 1] << 8)
+         | ((uint32_t)buffer[offset + 2] << 16)
+         | ((uint32_t)buffer[offset + 3] << 24);
+}
+
+// Header frame reuses the WriteEncoderCalibration layout: dx (offset 1) holds the payload byte
+// count as an exact-integer float; len (offset 9) holds the data float count. encoder_id (offset 0)
+// and x0 (offset 5) are carrier overhead.
+static void unpackTunnelHeader(const uint8_t* buffer, uint32_t* num_bytes, uint32_t* num_floats) {
+    *num_bytes = (uint32_t)unpackFloat(buffer, 1);
+    *num_floats = unpackUint32(buffer, 9);
+}
+
+// Each float32 carries 3 payload bytes little-endian as an exact integer in [0, 2^24); the final
+// float of the payload may carry fewer than 3. Returns the number of bytes written to out.
+static uint32_t unpackTunnelData(const uint8_t* buffer, uint32_t max_floats, uint8_t* out,
+                                 uint32_t bytes_remaining) {
+    uint32_t written = 0;
+    for (uint32_t i = 0; i < max_floats && written < bytes_remaining; i++) {
+        uint32_t word = (uint32_t)unpackFloat(buffer, i * 4U);
+        for (uint32_t b = 0; b < 3U && written < bytes_remaining; b++) {
+            out[written++] = (uint8_t)((word >> (8U * b)) & 0xFFU);
+        }
+    }
+    return written;
+}
+
 static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_t* rx_data) {
-    if (rx_header->IdType != FDCAN_EXTENDED_ID || rx_header->RxFrameType != FDCAN_DATA_FRAME) {
+    if (rx_header->IdType != FDCAN_EXTENDED_ID) {
         return;
     }
 
@@ -181,72 +239,63 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
     uint8_t data_length = fdcanDlcToLength(rx_header->DataLength);
     CanFrame response_frame = {0};
     bool should_send_response = false;
-    bool response_error = false;
+
+    // The CAN server issues PING (and other query commands) as remote (RTR) frames
+    // and expects a data-frame reply echoing the command id. Data-carrying commands
+    // such as ARB_MSG_REQUEST arrive as normal data frames.
+    if (rx_header->RxFrameType == FDCAN_REMOTE_FRAME) {
+        switch (id.command_id) {
+            case PING: {
+                response_frame = createCanFrame(id, NULL, 0U);
+                should_send_response = true;
+                break;
+            }
+            default:
+                // Unknown remote command, ignore
+                break;
+        }
+
+        if (should_send_response && sendCanFrame(&response_frame) != HAL_OK) {
+            Error_Handler();
+        }
+        return;
+    }
 
     switch (id.command_id) {
-        case PING: {
-            response_frame = createCanFrame(id, NULL, 0U);
-            should_send_response = true;
-            break;
-        }
-        case ADD_REQUEST: {
-            if (data_length != sizeof(AddRequestData)) {
-                break;
-            }
-            const AddRequestData* add_request_data = (const AddRequestData*)rx_data;
-            AddResponseData add_response_data = {
-                .a = (uint8_t)(add_request_data->a + add_request_data->b),
-            };
-            id.command_id = ADD_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&add_response_data, sizeof(add_response_data));
-            should_send_response = true;
-            break;
-        }
-        case SUBTRACT_REQUEST: {
-            if (data_length != sizeof(SubtractRequestData)) {
-                break;
-            }
-            const SubtractRequestData* subtract_request_data = (const SubtractRequestData*)rx_data;
-            SubtractResponseData subtract_response_data = {
-                .a = (uint8_t)(subtract_request_data->a - subtract_request_data->b),
-            };
-            id.command_id = SUBTRACT_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&subtract_response_data, sizeof(subtract_response_data));
-            should_send_response = true;
-            break;
-        }
-        case MULTIPLY_REQUEST: {
-            if (data_length != sizeof(MultiplyRequestData)) {
-                break;
-            }
-            const MultiplyRequestData* multiply_request_data = (const MultiplyRequestData*)rx_data;
-            MultiplyResponseData multiply_response_data = {
-                .a = (uint8_t)(multiply_request_data->a * multiply_request_data->b),
-            };
-            id.command_id = MULTIPLY_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&multiply_response_data, sizeof(multiply_response_data));
-            should_send_response = true;
-            break;
-        }
-        case DIVIDE_REQUEST: {
-            if (data_length != sizeof(DivideRequestData)) {
-                break;
-            }
-            const DivideRequestData* divide_request_data = (const DivideRequestData*)rx_data;
-            DivideResponseData divide_response_data = {0};
-            if (divide_request_data->b == 0U) {
-                response_error = true;
+        case ARB_MSG_REQUEST: {
+            if (!tunnel.filling) {
+                // First frame is the header carrying the payload size.
+                unpackTunnelHeader(rx_data, &tunnel.num_bytes, &tunnel.num_floats);
+                if (tunnel.num_bytes > sizeof(tunnel.buffer)) {
+                    tunnel.num_bytes = sizeof(tunnel.buffer); // Clamp to the devkit buffer
+                }
+                tunnel.received = 0;
+                tunnel.filling = tunnel.num_bytes > 0U;
+                processed_incoming_data = true; // Hold off the main loop until the message is complete
             } else {
-                divide_response_data.a = (uint8_t)(divide_request_data->a / divide_request_data->b);
+                // Subsequent frames carry float-encoded payload bytes.
+                uint32_t max_floats = data_length / 4U;
+                if (max_floats > TUNNEL_MAX_FLOATS_PER_FRAME) {
+                    max_floats = TUNNEL_MAX_FLOATS_PER_FRAME;
+                }
+                tunnel.received += unpackTunnelData(rx_data, max_floats,
+                                                    tunnel.buffer + tunnel.received,
+                                                    tunnel.num_bytes - tunnel.received);
+                if (tunnel.received >= tunnel.num_bytes) {
+                    tunnel.filling = false;
+                    memset(incoming_data, 0, sizeof(incoming_data));
+                    memcpy(incoming_data, tunnel.buffer, tunnel.num_bytes);
+                    processed_incoming_data = false; // Fresh decoded message ready for the main loop
+                }
             }
-            id.command_id = DIVIDE_RESPONSE;
-            id.error_flag = response_error;
-            response_frame = createCanFrame(id, (const uint8_t*)&divide_response_data, sizeof(divide_response_data));
+
+            // Ack every frame with a zero-length response, matching the control-board
+            // WriteEncoderCalibration reply. The server pairs it by request_id.
+            CanID response_id = {.priority = id.priority, .board_id = id.board_id,
+                                 .command_id = id.command_id, .request_id = id.request_id,
+                                 .error_flag = 0};
+            response_frame = createCanFrame(response_id, NULL, 0U);
             should_send_response = true;
-            break;
-        }
-        case REBOOT: {
-            NVIC_SystemReset();
             break;
         }
         default:
