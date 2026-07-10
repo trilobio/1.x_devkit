@@ -29,20 +29,38 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+// incoming_data[0] selects which group of pins the command targets.
 typedef enum {
-  LED1,
-  LED2,
-  LED3,
-} UserPins;
+  GROUP_LED = 0,
+  GROUP_PORT_A = 1,
+  GROUP_PORT_B = 2,
+} PinGroup;
+
+// LED ids are 1-indexed to match the wire protocol (incoming_data[1] == 1 -> LED1).
+typedef enum {
+  LED1 = 1,
+  LED2 = 2,
+  LED3 = 3,
+} UserLeds;
+
+// Port A/B enum values equal the GPIO pin number, which is also the bit index used by
+// GPIO_PIN_n (== 1 << n) and the value carried in incoming_data[1]. Only the pins listed
+// here are exposed for control; everything else is ignored. Omitted on purpose:
+// PA5 (STBY, CAN transceiver), PA13/PA14 (SWD), PB3 (SWD), PB4/PB13/PB14 (reserved).
+typedef enum {
+  PA0 = 0, PA1 = 1, PA2 = 2, PA3 = 3, PA4 = 4,
+  PA6 = 6, PA7 = 7, PA8 = 8, PA9 = 9, PA10 = 10, PA11 = 11, PA12 = 12,
+} UserPortAPins;
 
 typedef enum {
-  LOW,
-  HIGH
+  PB0 = 0, PB1 = 1, PB2 = 2, PB6 = 6, PB7 = 7,
+  PB8 = 8, PB10 = 10, PB12 = 12, PB15 = 15,
+} UserPortBPins;
+
+typedef enum {
+  LOW = 0,
+  HIGH = 1,
 } PinState;
-typedef struct {
-  UserPins pin;
-  PinState state;
-} UserPin;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -65,15 +83,12 @@ bool processed_incoming_data = false;
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
-void setGpio(UserPins pin, PinState state);
-void toggleGpio(UserPin pin);
+void setGpio(UserLeds pin, PinState state);
+static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-UserPin led1 = {LED1, LOW};
-UserPin led2 = {LED2, LOW};
-UserPin led3 = {LED3, LOW};
 /* USER CODE END 0 */
 
 /**
@@ -129,22 +144,10 @@ int main(void)
     }
 
     if (!processed_incoming_data) {
-        uint8_t led_to_set = incoming_data[0]; // First byte selects which LED to set
-        uint8_t led_state = incoming_data[1];  // Second byte selects the state (0 for LOW, non-zero for HIGH)
-        switch (led_to_set) {
-            case 1:
-                setGpio(LED1, led_state ? HIGH : LOW);
-                break;
-            case 2:
-                setGpio(LED2, led_state ? HIGH : LOW);
-                break;
-            case 3:
-                setGpio(LED3, led_state ? HIGH : LOW);
-                break;
-            default:
-                // Invalid LED number, do nothing or handle error
-                break;
-        }
+        // incoming_data[0] = group (0=LED, 1=port A, 2=port B)
+        // incoming_data[1] = pin within the group
+        // incoming_data[2] = state (0 = LOW, non-zero = HIGH)
+        applyPinCommand(incoming_data[0], incoming_data[1], incoming_data[2]);
         processed_incoming_data = true;
     }
 
@@ -213,9 +216,9 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-void setGpio(UserPins pin, PinState state){
+void setGpio(UserLeds pin, PinState state){
   GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-  
+
   switch(pin) {
     case LED1:
       HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, gpioState);
@@ -231,23 +234,56 @@ void setGpio(UserPins pin, PinState state){
       break;
   }
 }
-void toggleGpio(UserPin pin) {
-  switch(pin.pin) {
-    case LED1:
-      HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+
+// Apply a single pin command decoded from an incoming CAN message.
+//   group      -> PinGroup (0 = LED, 1 = port A, 2 = port B)
+//   pin        -> pin selector within the group (see the Port A/B enums; LEDs are 1-indexed)
+//   state_byte -> 0 drives the pin LOW, any other value drives it HIGH
+// Pins not listed in the enums are silently ignored so a bad request cannot disturb
+// reserved pins (CAN standby, SWD, etc.).
+static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte) {
+  PinState state = state_byte ? HIGH : LOW;
+  GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+  switch (group) {
+    case GROUP_LED:
+      switch ((UserLeds)pin) {
+        case LED1:
+        case LED2:
+        case LED3:
+          setGpio((UserLeds)pin, state);
+          break;
+        default:
+          break; // Unlisted LED: ignore
+      }
       break;
-    case LED2:
-      HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+
+    case GROUP_PORT_A:
+      switch ((UserPortAPins)pin) {
+        case PA0: case PA1: case PA2: case PA3: case PA4:
+        case PA6: case PA7: case PA8: case PA9:
+        case PA10: case PA11: case PA12:
+          HAL_GPIO_WritePin(GPIOA, (uint16_t)(1U << pin), gpioState);
+          break;
+        default:
+          break; // Unlisted / reserved port A pin: ignore
+      }
       break;
-    case LED3:
-      HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
+
+    case GROUP_PORT_B:
+      switch ((UserPortBPins)pin) {
+        case PB0: case PB1: case PB2: case PB6: case PB7:
+        case PB8: case PB10: case PB12: case PB15:
+          HAL_GPIO_WritePin(GPIOB, (uint16_t)(1U << pin), gpioState);
+          break;
+        default:
+          break; // Unlisted / reserved port B pin: ignore
+      }
       break;
+
     default:
-      // Handle invalid pin if necessary
-      break;
+      break; // Unknown group: ignore
   }
-  // Update the state in the UserPin struct
-  pin.state = (pin.state == HIGH) ? LOW : HIGH;
 }
 
 /* USER CODE END 4 */
