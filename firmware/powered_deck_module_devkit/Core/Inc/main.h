@@ -96,8 +96,6 @@ void Error_Handler(void);
 #define TRILO_CAN_TX_GPIO_Port GPIOB
 #define POWER_REQ_Pin GPIO_PIN_14
 #define POWER_REQ_GPIO_Port GPIOB
-#define PB15_Pin GPIO_PIN_15
-#define PB15_GPIO_Port GPIOB
 #define PA8_Pin GPIO_PIN_8
 #define PA8_GPIO_Port GPIOA
 #define PA9_Pin GPIO_PIN_9
