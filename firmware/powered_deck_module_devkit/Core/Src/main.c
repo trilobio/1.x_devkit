@@ -54,7 +54,7 @@ typedef enum {
 
 typedef enum {
   PB0 = 0, PB1 = 1, PB2 = 2, PB6 = 6, PB7 = 7,
-  PB8 = 8, PB10 = 10, PB12 = 12, PB15 = 15,
+  PB8 = 8, PB10 = 10, PB12 = 12,
 } UserPortBPins;
 
 typedef enum {
@@ -275,7 +275,7 @@ static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte) {
     case GROUP_PORT_B:
       switch ((UserPortBPins)pin) {
         case PB0: case PB1: case PB2: case PB6: case PB7:
-        case PB8: case PB10: case PB12: case PB15:
+        case PB8: case PB10: case PB12: 
           HAL_GPIO_WritePin(GPIOB, (uint16_t)(1U << pin), gpioState);
           break;
         default:
