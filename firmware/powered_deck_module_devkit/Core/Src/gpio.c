@@ -34,6 +34,7 @@
 
 /** Configure pins
      PH0-OSC_IN(PH0)   ------> RCC_OSC_IN
+     PH1-OSC_OUT(PH1)   ------> RCC_OSC_OUT
      PA13(JTMS/SWDIO)   ------> DEBUG_JTMS-SWDIO
      PA14(JTCK/SWCLK)   ------> DEBUG_JTCK-SWCLK
      PB3(JTDO/TRACESWO)   ------> DEBUG_JTDO-SWO
@@ -60,7 +61,7 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, PB0_Pin|PB1_Pin|PB2_Pin|PB10_Pin
-                          |PB12_Pin|PB6_Pin|PB7_Pin|PB8_Pin, GPIO_PIN_RESET);
+                          |PB6_Pin|PB7_Pin|PB8_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(POWER_REQ_GPIO_Port, POWER_REQ_Pin, GPIO_PIN_SET);
@@ -71,12 +72,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PH1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA0_Pin PA1_Pin PA2_Pin PA3_Pin
                            PA4_Pin STBY_Pin PA6_Pin PA7_Pin
@@ -92,12 +87,18 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB0_Pin PB1_Pin PB2_Pin PB10_Pin
-                           PB12_Pin PB6_Pin PB7_Pin PB8_Pin */
+                           PB6_Pin PB7_Pin PB8_Pin */
   GPIO_InitStruct.Pin = PB0_Pin|PB1_Pin|PB2_Pin|PB10_Pin
-                          |PB12_Pin|PB6_Pin|PB7_Pin|PB8_Pin;
+                          |PB6_Pin|PB7_Pin|PB8_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB12 PB15 PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_15|GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : POWER_REQ_Pin */
@@ -106,12 +107,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(POWER_REQ_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB15 PB4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_15|GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA15 */
   GPIO_InitStruct.Pin = GPIO_PIN_15;
