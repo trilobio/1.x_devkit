@@ -7,28 +7,28 @@ extern "C" {
 #include "stm32h5xx_hal.h"
 #include <stdbool.h>
 
-#define BOARD_ID 0x102
+#define BOARD_ID 110
 #define ALL_CALL_ID 0x000
 /*
-*    Priority : Board ID : Command ID : Request ID : Error
-*     2 bits      10 bits   8 bits       8 bits      1 bit
-* 
-*/
+ *    Priority : Board ID : Command ID : Request ID : Error
+ *     2 bits      10 bits   8 bits       8 bits      1 bit
+ *
+ */
 
 // Field widths (bits)
-#define ERROR_FLAG_SZ     1
-#define REQUEST_ID_SZ     8
-#define COMMAND_ID_SZ     8
-#define BOARD_ID_SZ       10
-#define PRIORITY_SZ       2
+#define ERROR_FLAG_SZ 1
+#define REQUEST_ID_SZ 8
+#define COMMAND_ID_SZ 8
+#define BOARD_ID_SZ 10
+#define PRIORITY_SZ 2
 
 // Bit budget (extended CAN ID is 29 bits) error checking
-#define CANID_BITS        29
-#define TOTAL_SZ          (ERROR_FLAG_SZ + REQUEST_ID_SZ + COMMAND_ID_SZ + BOARD_ID_SZ + PRIORITY_SZ)
+#define CANID_BITS 29
+#define TOTAL_SZ (ERROR_FLAG_SZ + REQUEST_ID_SZ + COMMAND_ID_SZ + BOARD_ID_SZ + PRIORITY_SZ)
 #define BOARD_ID_POSITION (CANID_BITS - PRIORITY_SZ - BOARD_ID_SZ)
 
 extern volatile bool receivedCanMessage; // True if CAN message received
-extern uint8_t incoming_data[64]; // Buffer to store incoming data
+extern uint8_t incoming_data[64];        // Buffer to store incoming data
 extern bool processed_incoming_data; // False when incoming_data holds a fresh, unhandled message
 
 typedef struct {
@@ -75,7 +75,6 @@ typedef struct __attribute__((packed)) {
 /*                                              │
 ────────────────────────────────────────────────┘
 */
-
 
 #ifdef __cplusplus
 }

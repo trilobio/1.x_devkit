@@ -1,0 +1,11 @@
+set default-list
+
+
+# Build firmware (config: Debug or Release)
+build config="Release":
+	cmake --preset {{config}}
+	cmake --build --preset {{config}}
+
+# Build and flash firmware (config: Debug or Release)
+flash config="Release": (build config)
+	STM32_Programmer_CLI -c port=SWD -w {{justfile_directory()}}/build/{{config}}/pdm_devkit.elf -v -rst
