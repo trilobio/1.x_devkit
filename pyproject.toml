@@ -1,0 +1,11 @@
+[project]
+name = "pdm-gpio-scripts"
+version = "0.1.0"
+description = "GPIO helper scripts for the powered deck module"
+requires-python = ">=3.12"
+dependencies = [
+    "can-elegans",
+]
+
+[tool.uv.sources]
+can-elegans = { path = "../can-elegans", editable = true }

@@ -29,22 +29,20 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-// incoming_data[0] selects which group of pins the command targets.
+// incoming_data[0] selects the public API port the command targets.
 typedef enum {
-    GROUP_LED = 0,
-    GROUP_PORT_A = 1,
-    GROUP_PORT_B = 2,
-} PinGroup;
+    PORT_A = 0,
+    PORT_B = 1,
+    PORT_LEDS = 2,
+} GpioPort;
 
-// LED ids are 1-indexed to match the wire protocol (incoming_data[1] == 1 -> LED1).
+// LED ids are zero-indexed to match the public API (incoming_data[1] == 0 -> LED1).
 typedef enum {
-    LED1 = 1,
-    LED2 = 2,
-    LED3 = 3,
+    LED1 = 0,
+    LED2 = 1,
+    LED3 = 2,
 } UserLeds;
 
-/* Port encoding used on the wire (see SetPinModeRequestData). */
-typedef enum { PORT_A = 0, PORT_B = 1 } GpioPort;
 /* Mode encoding used on the wire. */
 typedef enum { PIN_MODE_INPUT = 0, PIN_MODE_OUTPUT = 1 } GpioMode;
 
@@ -83,7 +81,7 @@ static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 static void setGpio(UserLeds pin, GPIO_PinState state);
 static bool resolveUserPin(uint8_t port, uint8_t pin, GPIO_TypeDef** gpio_port, uint16_t* gpio_pin);
-static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte);
+static void applyPinCommand(uint8_t port, uint8_t pin, uint8_t state_byte);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,8 +139,8 @@ int main(void) {
         }
 
         if (!processed_incoming_data) {
-            // incoming_data[0] = group (0=LED, 1=port A, 2=port B)
-            // incoming_data[1] = pin within the group
+            // incoming_data[0] = port (0=GPIOA, 1=GPIOB, 2=LEDs)
+            // incoming_data[1] = pin within the port (LED pins are 0-based)
             // incoming_data[2] = state (0 = LOW, non-zero = HIGH)
             applyPinCommand(incoming_data[0], incoming_data[1], incoming_data[2]);
             processed_incoming_data = true;
@@ -282,16 +280,16 @@ bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
     return true;
 }
 // Apply a single pin command decoded from an incoming CAN message.
-//   group      -> PinGroup (0 = LED, 1 = port A, 2 = port B)
-//   pin        -> pin number within the group (LEDs are 1-indexed)
+//   port       -> GpioPort (0 = GPIOA, 1 = GPIOB, 2 = LEDs)
+//   pin        -> pin number within the port (LEDs are 0-indexed)
 //   state_byte -> 0 drives the pin LOW, any other value drives it HIGH
-// Pins not present in user_pin_masks are silently ignored so a bad request cannot
-// disturb reserved pins (CAN standby, SWD, etc.).
-static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte) {
+// GPIO pins not present in user_pin_masks are silently ignored so a bad request
+// cannot disturb reserved pins (CAN standby, SWD, etc.).
+static void applyPinCommand(uint8_t port, uint8_t pin, uint8_t state_byte) {
     GPIO_PinState gpioState = state_byte ? GPIO_PIN_SET : GPIO_PIN_RESET;
 
-    switch (group) {
-    case GROUP_LED:
+    switch (port) {
+    case PORT_LEDS:
         switch ((UserLeds)pin) {
         case LED1:
         case LED2:
@@ -303,9 +301,8 @@ static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte) {
         }
         break;
 
-    case GROUP_PORT_A:
-    case GROUP_PORT_B: {
-        uint8_t port = (group == GROUP_PORT_A) ? PORT_A : PORT_B;
+    case PORT_A:
+    case PORT_B: {
         GPIO_TypeDef* gpio_port;
         uint16_t gpio_pin;
 
@@ -316,7 +313,7 @@ static void applyPinCommand(uint8_t group, uint8_t pin, uint8_t state_byte) {
     }
 
     default:
-        break; // Unknown group: ignore
+        break; // Unknown port: ignore
     }
 }
 
