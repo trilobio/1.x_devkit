@@ -6,6 +6,33 @@ build config="Release":
 	cmake --preset {{config}}
 	cmake --build --preset {{config}}
 
-# Build and flash firmware (config: Debug or Release)
-flash config="Release": (build config)
-	STM32_Programmer_CLI -c port=SWD -w {{justfile_directory()}}/build/{{config}}/pdm_devkit.elf -v -rst
+# Build one powered-deck module image for a board ID from 100 through 115.
+build-module board_id config="Release":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! [[ "{{board_id}}" =~ ^(10[0-9]|11[0-5])$ ]]; then
+		echo "board_id must be between 100 and 115" >&2
+		exit 2
+	fi
+	cmake -S . -B build/board-{{board_id}}-{{config}} -G Ninja \
+		-DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake \
+		-DCMAKE_BUILD_TYPE={{config}} \
+		-DBOARD_ID={{board_id}}
+	cmake --build build/board-{{board_id}}-{{config}}
+
+# Build all 16 powered-deck module images.
+build-all config="Release":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	for board_id in {100..115}; do
+		just build-module "$board_id" "{{config}}"
+	done
+
+# Build and flash one powered-deck module image.
+flash board_id="110" config="Release":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	just build-module "{{board_id}}" "{{config}}"
+	STM32_Programmer_CLI -c port=SWD \
+		-w build/board-{{board_id}}-{{config}}/pdm_devkit.elf \
+		-v -rst

@@ -28,6 +28,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
+# CAN board ID. The header keeps 110 as the source-level default, while
+# per-board builds override it with -DBOARD_ID=<id>.
+set(BOARD_ID 110 CACHE STRING "CAN board ID")
+
+if(NOT BOARD_ID MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "BOARD_ID must be numeric")
+endif()
+
+if(BOARD_ID LESS 1 OR BOARD_ID GREATER 1023)
+    message(FATAL_ERROR "BOARD_ID must be between 1 and 1023")
+endif()
+
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
@@ -54,7 +66,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
+    BOARD_ID=${BOARD_ID}
 )
 
 # Remove wrong libob.a library dependency when using cpp files
