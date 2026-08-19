@@ -28,6 +28,45 @@ build-all config="Release":
 		just build-module "$board_id" "{{config}}"
 	done
 
+# Copy the 16 Release board images into a flat pdmdk_fwbundle directory.
+extract:
+	rm -rf pdmdk_fwbundle
+	mkdir -p pdmdk_fwbundle
+	cp build/board-100-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-100.bin
+	cp build/board-100-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-100.elf
+	cp build/board-101-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-101.bin
+	cp build/board-101-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-101.elf
+	cp build/board-102-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-102.bin
+	cp build/board-102-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-102.elf
+	cp build/board-103-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-103.bin
+	cp build/board-103-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-103.elf
+	cp build/board-104-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-104.bin
+	cp build/board-104-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-104.elf
+	cp build/board-105-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-105.bin
+	cp build/board-105-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-105.elf
+	cp build/board-106-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-106.bin
+	cp build/board-106-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-106.elf
+	cp build/board-107-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-107.bin
+	cp build/board-107-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-107.elf
+	cp build/board-108-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-108.bin
+	cp build/board-108-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-108.elf
+	cp build/board-109-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-109.bin
+	cp build/board-109-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-109.elf
+	cp build/board-110-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-110.bin
+	cp build/board-110-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-110.elf
+	cp build/board-111-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-111.bin
+	cp build/board-111-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-111.elf
+	cp build/board-112-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-112.bin
+	cp build/board-112-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-112.elf
+	cp build/board-113-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-113.bin
+	cp build/board-113-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-113.elf
+	cp build/board-114-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-114.bin
+	cp build/board-114-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-114.elf
+	cp build/board-115-Release/pdm_devkit.bin pdmdk_fwbundle/pdm-115.bin
+	cp build/board-115-Release/pdm_devkit.elf pdmdk_fwbundle/pdm-115.elf
+	rm -f pdmdk_fwbundle.tar.gz
+	tar -czf pdmdk_fwbundle.tar.gz pdmdk_fwbundle
+
 # Build and flash one powered-deck module image.
 flash board_id="110" config="Release":
 	#!/usr/bin/env bash

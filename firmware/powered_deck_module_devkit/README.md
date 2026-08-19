@@ -51,6 +51,32 @@ board. Use `Debug` to build Debug images:
 just build-all Debug
 ```
 
+## Extract firmware bundle
+
+Copy the 16 Release board images into a clean, flat bundle directory:
+
+```bash
+just extract
+```
+
+The bundle preserves each build directory name, for example:
+
+```text
+pdmdk_fwbundle/pdm-100.elf
+pdmdk_fwbundle/pdm-100.bin
+pdmdk_fwbundle/pdm-101.elf
+pdmdk_fwbundle/pdm-101.bin
+...
+pdmdk_fwbundle/pdm-115.elf
+pdmdk_fwbundle/pdm-115.bin
+```
+
+The recipe also creates a compressed archive:
+
+```text
+pdmdk_fwbundle.tar.gz
+```
+
 ## Flash one board
 
 Connect the ST-Link to the target module, then run:
