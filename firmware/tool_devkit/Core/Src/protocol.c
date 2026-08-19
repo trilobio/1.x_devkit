@@ -9,12 +9,12 @@
 
 volatile bool receivedCanMessage = false;
 
-static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id, uint16_t all_call_id, void (*err_handler)(void));
+static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id,
+                                  uint16_t all_call_id, void (*err_handler)(void));
 static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16_t pin,
                          void (*err_handler)(void));
 static uint8_t fdcanDlcToLength(uint32_t dlc);
 static uint32_t lengthToFdcanDlc(uint8_t length);
-
 
 static void CanInit(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16_t pin,
                     void (*err_handler)(void)) {
@@ -78,7 +78,6 @@ void CanCommsInit(void) {
     CanInit(&hfdcan2, STBY_GPIO_Port, STBY_Pin, Error_Handler);
 }
 
-
 void handleCanMessage(void) {
     do {
         receivedCanMessage = false;
@@ -99,15 +98,14 @@ void handleCanMessage(void) {
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
     (void)hfdcan;
 
-    if ((RxFifo0ITs & (FDCAN_IT_RX_FIFO0_NEW_MESSAGE |
-                       FDCAN_IT_RX_FIFO0_FULL |
+    if ((RxFifo0ITs & (FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_FULL |
                        FDCAN_IT_RX_FIFO0_MESSAGE_LOST)) != RESET) {
         receivedCanMessage = true;
     }
 }
 
 static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id,
-                          uint16_t CFG_ALL_BOARDS_ID, void (*err_handler)(void)) {
+                                  uint16_t CFG_ALL_BOARDS_ID, void (*err_handler)(void)) {
     FDCAN_FilterTypeDef thisBoardFilterConfig;
     thisBoardFilterConfig.IdType = FDCAN_EXTENDED_ID;
     thisBoardFilterConfig.FilterIndex = 0;
@@ -140,10 +138,10 @@ static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id
         err_handler();
     }
 
-    // Reject all standard ID data frames, reject non matching extended ID messages, reject standard remote frames, Filter extended remote frames
+    // Reject all standard ID data frames, reject non matching extended ID messages, reject standard
+    // remote frames, Filter extended remote frames
     if (HAL_FDCAN_ConfigGlobalFilter(hfdcan, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
-                                     FDCAN_FILTER_REMOTE)
-        != HAL_OK) {
+                                     FDCAN_FILTER_REMOTE) != HAL_OK) {
         err_handler();
     }
 }
@@ -158,9 +156,8 @@ static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16
         err_handler();
     }
     if (HAL_FDCAN_ActivateNotification(hfdcan,
-                                       FDCAN_IT_RX_FIFO0_NEW_MESSAGE |
-                                       FDCAN_IT_RX_FIFO0_FULL |
-                                       FDCAN_IT_RX_FIFO0_MESSAGE_LOST,
+                                       FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_FULL |
+                                           FDCAN_IT_RX_FIFO0_MESSAGE_LOST,
                                        0) != HAL_OK) {
         err_handler();
     }
@@ -173,7 +170,8 @@ static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16
 }
 
 static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_t* rx_data) {
-    if (rx_header->IdType != FDCAN_EXTENDED_ID || rx_header->RxFrameType != FDCAN_DATA_FRAME) {
+    if (rx_header->IdType !=
+        FDCAN_EXTENDED_ID /* || rx_header->RxFrameType != FDCAN_DATA_FRAME */) {
         return;
     }
 
@@ -184,74 +182,91 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
     bool response_error = false;
 
     switch (id.command_id) {
-        case PING: {
-            response_frame = createCanFrame(id, NULL, 0U);
-            should_send_response = true;
+    case PING: {
+        response_frame = createCanFrame(id, NULL, 0U);
+        should_send_response = true;
+        break;
+    }
+    case ADD_REQUEST: {
+        if (data_length != sizeof(AddRequestData)) {
             break;
         }
-        case ADD_REQUEST: {
-            if (data_length != sizeof(AddRequestData)) {
-                break;
-            }
-            const AddRequestData* add_request_data = (const AddRequestData*)rx_data;
-            AddResponseData add_response_data = {
-                .a = (uint8_t)(add_request_data->a + add_request_data->b),
-            };
-            id.command_id = ADD_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&add_response_data, sizeof(add_response_data));
-            should_send_response = true;
+        const AddRequestData* add_request_data = (const AddRequestData*)rx_data;
+        AddResponseData add_response_data = {
+            .a = (uint8_t)(add_request_data->a + add_request_data->b),
+        };
+        id.command_id = ADD_RESPONSE;
+        response_frame =
+            createCanFrame(id, (const uint8_t*)&add_response_data, sizeof(add_response_data));
+        should_send_response = true;
+        break;
+    }
+    case SUBTRACT_REQUEST: {
+        if (data_length != sizeof(SubtractRequestData)) {
             break;
         }
-        case SUBTRACT_REQUEST: {
-            if (data_length != sizeof(SubtractRequestData)) {
-                break;
-            }
-            const SubtractRequestData* subtract_request_data = (const SubtractRequestData*)rx_data;
-            SubtractResponseData subtract_response_data = {
-                .a = (uint8_t)(subtract_request_data->a - subtract_request_data->b),
-            };
-            id.command_id = SUBTRACT_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&subtract_response_data, sizeof(subtract_response_data));
-            should_send_response = true;
+        const SubtractRequestData* subtract_request_data = (const SubtractRequestData*)rx_data;
+        SubtractResponseData subtract_response_data = {
+            .a = (uint8_t)(subtract_request_data->a - subtract_request_data->b),
+        };
+        id.command_id = SUBTRACT_RESPONSE;
+        response_frame = createCanFrame(id, (const uint8_t*)&subtract_response_data,
+                                        sizeof(subtract_response_data));
+        should_send_response = true;
+        break;
+    }
+    case MULTIPLY_REQUEST: {
+        if (data_length != sizeof(MultiplyRequestData)) {
             break;
         }
-        case MULTIPLY_REQUEST: {
-            if (data_length != sizeof(MultiplyRequestData)) {
-                break;
-            }
-            const MultiplyRequestData* multiply_request_data = (const MultiplyRequestData*)rx_data;
-            MultiplyResponseData multiply_response_data = {
-                .a = (uint8_t)(multiply_request_data->a * multiply_request_data->b),
-            };
-            id.command_id = MULTIPLY_RESPONSE;
-            response_frame = createCanFrame(id, (const uint8_t*)&multiply_response_data, sizeof(multiply_response_data));
-            should_send_response = true;
+        const MultiplyRequestData* multiply_request_data = (const MultiplyRequestData*)rx_data;
+        MultiplyResponseData multiply_response_data = {
+            .a = (uint8_t)(multiply_request_data->a * multiply_request_data->b),
+        };
+        id.command_id = MULTIPLY_RESPONSE;
+        response_frame = createCanFrame(id, (const uint8_t*)&multiply_response_data,
+                                        sizeof(multiply_response_data));
+        should_send_response = true;
+        break;
+    }
+    case DIVIDE_REQUEST: {
+        if (data_length != sizeof(DivideRequestData)) {
             break;
         }
-        case DIVIDE_REQUEST: {
-            if (data_length != sizeof(DivideRequestData)) {
-                break;
-            }
-            const DivideRequestData* divide_request_data = (const DivideRequestData*)rx_data;
-            DivideResponseData divide_response_data = {0};
-            if (divide_request_data->b == 0U) {
-                response_error = true;
-            } else {
-                divide_response_data.a = (uint8_t)(divide_request_data->a / divide_request_data->b);
-            }
-            id.command_id = DIVIDE_RESPONSE;
-            id.error_flag = response_error;
-            response_frame = createCanFrame(id, (const uint8_t*)&divide_response_data, sizeof(divide_response_data));
-            should_send_response = true;
+        const DivideRequestData* divide_request_data = (const DivideRequestData*)rx_data;
+        DivideResponseData divide_response_data = {0};
+        if (divide_request_data->b == 0U) {
+            response_error = true;
+        } else {
+            divide_response_data.a = (uint8_t)(divide_request_data->a / divide_request_data->b);
+        }
+        id.command_id = DIVIDE_RESPONSE;
+        id.error_flag = response_error;
+        response_frame =
+            createCanFrame(id, (const uint8_t*)&divide_response_data, sizeof(divide_response_data));
+        should_send_response = true;
+        break;
+    }
+    case SET_LIGHT_LEVELS: {
+        if (data_length != sizeof(SetPinModeRequestData)) {
             break;
         }
-        case REBOOT: {
-            NVIC_SystemReset();
-            break;
-        }
-        default:
-            // Handle unknown command or ignore
-            break;
+        const SetPinModeRequestData* set_pin_request_data = (const SetPinModeRequestData*)rx_data;
+        bool pin_ok = setGpioMode(set_pin_request_data->port, set_pin_request_data->pin,
+                                  set_pin_request_data->mode);
+        id.error_flag = !pin_ok;
+        response_frame = createCanFrame(id, (const uint8_t*)set_pin_request_data,
+                                        sizeof(*set_pin_request_data));
+        should_send_response = true;
+        break;
+    }
+    case REBOOT: {
+        NVIC_SystemReset();
+        break;
+    }
+    default:
+        // Handle unknown command or ignore
+        break;
     }
 
     if (should_send_response && sendCanFrame(&response_frame) != HAL_OK) {
@@ -261,40 +276,40 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
 
 static uint8_t fdcanDlcToLength(uint32_t dlc) {
     switch (dlc) {
-        case FDCAN_DLC_BYTES_0:
-            return 0U;
-        case FDCAN_DLC_BYTES_1:
-            return 1U;
-        case FDCAN_DLC_BYTES_2:
-            return 2U;
-        case FDCAN_DLC_BYTES_3:
-            return 3U;
-        case FDCAN_DLC_BYTES_4:
-            return 4U;
-        case FDCAN_DLC_BYTES_5:
-            return 5U;
-        case FDCAN_DLC_BYTES_6:
-            return 6U;
-        case FDCAN_DLC_BYTES_7:
-            return 7U;
-        case FDCAN_DLC_BYTES_8:
-            return 8U;
-        case FDCAN_DLC_BYTES_12:
-            return 12U;
-        case FDCAN_DLC_BYTES_16:
-            return 16U;
-        case FDCAN_DLC_BYTES_20:
-            return 20U;
-        case FDCAN_DLC_BYTES_24:
-            return 24U;
-        case FDCAN_DLC_BYTES_32:
-            return 32U;
-        case FDCAN_DLC_BYTES_48:
-            return 48U;
-        case FDCAN_DLC_BYTES_64:
-            return 64U;
-        default:
-            return 0U;
+    case FDCAN_DLC_BYTES_0:
+        return 0U;
+    case FDCAN_DLC_BYTES_1:
+        return 1U;
+    case FDCAN_DLC_BYTES_2:
+        return 2U;
+    case FDCAN_DLC_BYTES_3:
+        return 3U;
+    case FDCAN_DLC_BYTES_4:
+        return 4U;
+    case FDCAN_DLC_BYTES_5:
+        return 5U;
+    case FDCAN_DLC_BYTES_6:
+        return 6U;
+    case FDCAN_DLC_BYTES_7:
+        return 7U;
+    case FDCAN_DLC_BYTES_8:
+        return 8U;
+    case FDCAN_DLC_BYTES_12:
+        return 12U;
+    case FDCAN_DLC_BYTES_16:
+        return 16U;
+    case FDCAN_DLC_BYTES_20:
+        return 20U;
+    case FDCAN_DLC_BYTES_24:
+        return 24U;
+    case FDCAN_DLC_BYTES_32:
+        return 32U;
+    case FDCAN_DLC_BYTES_48:
+        return 48U;
+    case FDCAN_DLC_BYTES_64:
+        return 64U;
+    default:
+        return 0U;
     }
 }
 

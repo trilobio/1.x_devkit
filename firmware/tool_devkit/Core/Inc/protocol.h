@@ -1,5 +1,6 @@
 #ifndef __PROTOCOL_H
 #define __PROTOCOL_H
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -7,24 +8,24 @@ extern "C" {
 #include "stm32h5xx_hal.h"
 #include <stdbool.h>
 
-#define BOARD_ID 0x101
+#define BOARD_ID 201
 #define ALL_CALL_ID 0x000
 /*
-*    Priority : Board ID : Command ID : Request ID : Error
-*     2 bits      10 bits   8 bits       8 bits      1 bit
-* 
-*/
+ *    Priority : Board ID : Command ID : Request ID : Error
+ *     2 bits      10 bits   8 bits       8 bits      1 bit
+ *
+ */
 
 // Field widths (bits)
-#define ERROR_FLAG_SZ     1
-#define REQUEST_ID_SZ     8
-#define COMMAND_ID_SZ     8
-#define BOARD_ID_SZ       10
-#define PRIORITY_SZ       2
+#define ERROR_FLAG_SZ 1
+#define REQUEST_ID_SZ 8
+#define COMMAND_ID_SZ 8
+#define BOARD_ID_SZ 10
+#define PRIORITY_SZ 2
 
 // Bit budget (extended CAN ID is 29 bits) error checking
-#define CANID_BITS        29
-#define TOTAL_SZ          (ERROR_FLAG_SZ + REQUEST_ID_SZ + COMMAND_ID_SZ + BOARD_ID_SZ + PRIORITY_SZ)
+#define CANID_BITS 29
+#define TOTAL_SZ (ERROR_FLAG_SZ + REQUEST_ID_SZ + COMMAND_ID_SZ + BOARD_ID_SZ + PRIORITY_SZ)
 #define BOARD_ID_POSITION (CANID_BITS - PRIORITY_SZ - BOARD_ID_SZ)
 
 extern volatile bool receivedCanMessage; // True if CAN message received
@@ -43,15 +44,18 @@ typedef struct {
 } CanFrame;
 
 typedef enum {
-    PING = 0x01,
-    ADD_REQUEST = 0x02,
-    ADD_RESPONSE = 0x03,
-    SUBTRACT_REQUEST = 0x04,
-    SUBTRACT_RESPONSE = 0x05,
-    MULTIPLY_REQUEST = 0x06,
-    MULTIPLY_RESPONSE = 0x07,
-    DIVIDE_REQUEST = 0x08,
-    DIVIDE_RESPONSE = 0x09,
+    PING = 0x02,
+    ADD_REQUEST = 0x12,
+    ADD_RESPONSE = 0x13,
+    SUBTRACT_REQUEST = 0x14,
+    SUBTRACT_RESPONSE = 0x15,
+    MULTIPLY_REQUEST = 0x16,
+    MULTIPLY_RESPONSE = 0x17,
+    DIVIDE_REQUEST = 0x18,
+    DIVIDE_RESPONSE = 0x19,
+
+    // 62 in decimal. also will be used to set pin mode instead (port, pin, mode,filler)
+    SET_LIGHT_LEVELS = 0x3E,
     // Add more commands as needed
     REBOOT = 0xFF
 } CommandID;
@@ -133,6 +137,28 @@ typedef struct __attribute__((packed)) {
 ────────────────────────────────────────────────┘
 */
 
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+// Actuall set_light_levels fields but
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
 
 #ifdef __cplusplus
 }
