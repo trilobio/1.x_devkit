@@ -46,6 +46,8 @@ typedef struct {
 
 typedef enum {
     PING = 2,
+    READ_PROBE = 13,       // reused for reading a GPIO level
+    SET_LIGHT_LEVELS = 62, // reused for setting pin mode
     ARB_MSG_REQUEST = 63,
     ARB_MSG_RESPONSE = 65,
 } CommandID;
@@ -59,6 +61,48 @@ HAL_StatusTypeDef sendCanFrame(const CanFrame* frame);
 void handleCanMessage(void);
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs);
+
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+// Actuall set_light_levels fields but
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+// READ_PROBE carries the port in the upper nibble and the pin index in the
+// lower nibble: selector = (port << 4) | pin.
+//
+// Basically, split one u8 into 2 u4s :D
+typedef struct __attribute__((packed)) {
+    uint8_t selector;
+} ReadProbeRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint8_t state;
+} ReadProbeResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
 
 /*
 ────────────────────────────────────────────────┐

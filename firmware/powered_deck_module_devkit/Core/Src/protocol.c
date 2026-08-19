@@ -9,12 +9,12 @@
 
 volatile bool receivedCanMessage = false;
 
-static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id, uint16_t all_call_id, void (*err_handler)(void));
+static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id,
+                                  uint16_t all_call_id, void (*err_handler)(void));
 static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16_t pin,
                          void (*err_handler)(void));
 static uint8_t fdcanDlcToLength(uint32_t dlc);
 static uint32_t lengthToFdcanDlc(uint8_t length);
-
 
 static void CanInit(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16_t pin,
                     void (*err_handler)(void)) {
@@ -78,7 +78,6 @@ void CanCommsInit(void) {
     CanInit(&hfdcan2, STBY_GPIO_Port, STBY_Pin, Error_Handler);
 }
 
-
 void handleCanMessage(void) {
     do {
         receivedCanMessage = false;
@@ -99,15 +98,14 @@ void handleCanMessage(void) {
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
     (void)hfdcan;
 
-    if ((RxFifo0ITs & (FDCAN_IT_RX_FIFO0_NEW_MESSAGE |
-                       FDCAN_IT_RX_FIFO0_FULL |
+    if ((RxFifo0ITs & (FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_FULL |
                        FDCAN_IT_RX_FIFO0_MESSAGE_LOST)) != RESET) {
         receivedCanMessage = true;
     }
 }
 
 static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id,
-                          uint16_t CFG_ALL_BOARDS_ID, void (*err_handler)(void)) {
+                                  uint16_t CFG_ALL_BOARDS_ID, void (*err_handler)(void)) {
     FDCAN_FilterTypeDef thisBoardFilterConfig;
     thisBoardFilterConfig.IdType = FDCAN_EXTENDED_ID;
     thisBoardFilterConfig.FilterIndex = 0;
@@ -140,10 +138,10 @@ static void configureFDCANFilters(FDCAN_HandleTypeDef* hfdcan, uint16_t board_id
         err_handler();
     }
 
-    // Reject all standard ID data frames, reject non matching extended ID messages, reject standard remote frames, Filter extended remote frames
+    // Reject all standard ID data frames, reject non matching extended ID messages, reject standard
+    // remote frames, Filter extended remote frames
     if (HAL_FDCAN_ConfigGlobalFilter(hfdcan, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
-                                     FDCAN_FILTER_REMOTE)
-        != HAL_OK) {
+                                     FDCAN_FILTER_REMOTE) != HAL_OK) {
         err_handler();
     }
 }
@@ -158,9 +156,8 @@ static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16
         err_handler();
     }
     if (HAL_FDCAN_ActivateNotification(hfdcan,
-                                       FDCAN_IT_RX_FIFO0_NEW_MESSAGE |
-                                       FDCAN_IT_RX_FIFO0_FULL |
-                                       FDCAN_IT_RX_FIFO0_MESSAGE_LOST,
+                                       FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_FULL |
+                                           FDCAN_IT_RX_FIFO0_MESSAGE_LOST,
                                        0) != HAL_OK) {
         err_handler();
     }
@@ -178,34 +175,30 @@ static void startupFDCAN(FDCAN_HandleTypeDef* hfdcan, GPIO_TypeDef* port, uint16
  * We decode them back to raw bytes here. Mirrors internal/common/Src/can.cpp and
  * the control-board WriteEncoderCalibration handler in the main firmware.
  */
-#define TUNNEL_BUFFER_SIZE 64  // Matches incoming_data; longer messages are truncated
-#define TUNNEL_MAX_FLOATS_PER_FRAME 16  // 16 float32 == 64 bytes, one full CAN FD frame
+#define TUNNEL_BUFFER_SIZE 64          // Matches incoming_data; longer messages are truncated
+#define TUNNEL_MAX_FLOATS_PER_FRAME 16 // 16 float32 == 64 bytes, one full CAN FD frame
 
 typedef struct {
     bool filling;
-    uint32_t num_bytes;   // Total payload byte count (from the header's dx field)
-    uint32_t num_floats;  // Total data floats (from the header's len field), informational
-    uint32_t received;    // Payload bytes decoded so far
+    uint32_t num_bytes;  // Total payload byte count (from the header's dx field)
+    uint32_t num_floats; // Total data floats (from the header's len field), informational
+    uint32_t received;   // Payload bytes decoded so far
     uint8_t buffer[TUNNEL_BUFFER_SIZE];
 } TunnelState;
 
 static TunnelState tunnel;
 
 static float unpackFloat(const uint8_t* buffer, size_t offset) {
-    uint32_t bits = (uint32_t)buffer[offset]
-                  | ((uint32_t)buffer[offset + 1] << 8)
-                  | ((uint32_t)buffer[offset + 2] << 16)
-                  | ((uint32_t)buffer[offset + 3] << 24);
+    uint32_t bits = (uint32_t)buffer[offset] | ((uint32_t)buffer[offset + 1] << 8) |
+                    ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
     float result;
     memcpy(&result, &bits, sizeof(result));
     return result;
 }
 
 static uint32_t unpackUint32(const uint8_t* buffer, size_t offset) {
-    return (uint32_t)buffer[offset]
-         | ((uint32_t)buffer[offset + 1] << 8)
-         | ((uint32_t)buffer[offset + 2] << 16)
-         | ((uint32_t)buffer[offset + 3] << 24);
+    return (uint32_t)buffer[offset] | ((uint32_t)buffer[offset + 1] << 8) |
+           ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
 }
 
 // Header frame reuses the WriteEncoderCalibration layout: dx (offset 1) holds the payload byte
@@ -245,14 +238,14 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
     // such as ARB_MSG_REQUEST arrive as normal data frames.
     if (rx_header->RxFrameType == FDCAN_REMOTE_FRAME) {
         switch (id.command_id) {
-            case PING: {
-                response_frame = createCanFrame(id, NULL, 0U);
-                should_send_response = true;
-                break;
-            }
-            default:
-                // Unknown remote command, ignore
-                break;
+        case PING: {
+            response_frame = createCanFrame(id, NULL, 0U);
+            should_send_response = true;
+            break;
+        }
+        default:
+            // Unknown remote command, ignore
+            break;
         }
 
         if (should_send_response && sendCanFrame(&response_frame) != HAL_OK) {
@@ -262,45 +255,78 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
     }
 
     switch (id.command_id) {
-        case ARB_MSG_REQUEST: {
-            if (!tunnel.filling) {
-                // First frame is the header carrying the payload size.
-                unpackTunnelHeader(rx_data, &tunnel.num_bytes, &tunnel.num_floats);
-                if (tunnel.num_bytes > sizeof(tunnel.buffer)) {
-                    tunnel.num_bytes = sizeof(tunnel.buffer); // Clamp to the devkit buffer
-                }
-                tunnel.received = 0;
-                tunnel.filling = tunnel.num_bytes > 0U;
-                processed_incoming_data = true; // Hold off the main loop until the message is complete
-            } else {
-                // Subsequent frames carry float-encoded payload bytes.
-                uint32_t max_floats = data_length / 4U;
-                if (max_floats > TUNNEL_MAX_FLOATS_PER_FRAME) {
-                    max_floats = TUNNEL_MAX_FLOATS_PER_FRAME;
-                }
-                tunnel.received += unpackTunnelData(rx_data, max_floats,
-                                                    tunnel.buffer + tunnel.received,
-                                                    tunnel.num_bytes - tunnel.received);
-                if (tunnel.received >= tunnel.num_bytes) {
-                    tunnel.filling = false;
-                    memset(incoming_data, 0, sizeof(incoming_data));
-                    memcpy(incoming_data, tunnel.buffer, tunnel.num_bytes);
-                    processed_incoming_data = false; // Fresh decoded message ready for the main loop
-                }
+    case ARB_MSG_REQUEST: {
+        if (!tunnel.filling) {
+            // First frame is the header carrying the payload size.
+            unpackTunnelHeader(rx_data, &tunnel.num_bytes, &tunnel.num_floats);
+            if (tunnel.num_bytes > sizeof(tunnel.buffer)) {
+                tunnel.num_bytes = sizeof(tunnel.buffer); // Clamp to the devkit buffer
             }
+            tunnel.received = 0;
+            tunnel.filling = tunnel.num_bytes > 0U;
+            processed_incoming_data = true; // Hold off the main loop until the message is complete
+        } else {
+            // Subsequent frames carry float-encoded payload bytes.
+            uint32_t max_floats = data_length / 4U;
+            if (max_floats > TUNNEL_MAX_FLOATS_PER_FRAME) {
+                max_floats = TUNNEL_MAX_FLOATS_PER_FRAME;
+            }
+            tunnel.received +=
+                unpackTunnelData(rx_data, max_floats, tunnel.buffer + tunnel.received,
+                                 tunnel.num_bytes - tunnel.received);
+            if (tunnel.received >= tunnel.num_bytes) {
+                tunnel.filling = false;
+                memset(incoming_data, 0, sizeof(incoming_data));
+                memcpy(incoming_data, tunnel.buffer, tunnel.num_bytes);
+                processed_incoming_data = false; // Fresh decoded message ready for the main loop
+            }
+        }
 
-            // Ack every frame with a zero-length response, matching the control-board
-            // WriteEncoderCalibration reply. The server pairs it by request_id.
-            CanID response_id = {.priority = id.priority, .board_id = id.board_id,
-                                 .command_id = id.command_id, .request_id = id.request_id,
-                                 .error_flag = 0};
-            response_frame = createCanFrame(response_id, NULL, 0U);
-            should_send_response = true;
+        // Ack every frame with a zero-length response, matching the control-board
+        // WriteEncoderCalibration reply. The server pairs it by request_id.
+        CanID response_id = {.priority = id.priority,
+                             .board_id = id.board_id,
+                             .command_id = id.command_id,
+                             .request_id = id.request_id,
+                             .error_flag = 0};
+        response_frame = createCanFrame(response_id, NULL, 0U);
+        should_send_response = true;
+        break;
+    }
+    case READ_PROBE: {
+        if (data_length != sizeof(ReadProbeRequestData)) {
             break;
         }
-        default:
-            // Handle unknown command or ignore
+
+        const ReadProbeRequestData* read_probe_request =
+            (const ReadProbeRequestData*)rx_data;
+        const uint8_t port = (uint8_t)(read_probe_request->selector >> 4U);
+        const uint8_t pin = (uint8_t)(read_probe_request->selector & 0x0FU);
+        ReadProbeResponseData read_probe_response = {.state = 0U};
+
+        bool pin_ok = readGpio(port, pin, &read_probe_response.state);
+        id.error_flag = !pin_ok;
+        response_frame = createCanFrame(id, (const uint8_t*)&read_probe_response,
+                                        sizeof(read_probe_response));
+        should_send_response = true;
+        break;
+    }
+    case SET_LIGHT_LEVELS: {
+        if (data_length != sizeof(SetPinModeRequestData)) {
             break;
+        }
+        const SetPinModeRequestData* set_pin_request_data = (const SetPinModeRequestData*)rx_data;
+        bool pin_ok = setGpioMode(set_pin_request_data->port, set_pin_request_data->pin,
+                                  set_pin_request_data->mode);
+        id.error_flag = !pin_ok;
+        response_frame =
+            createCanFrame(id, (const uint8_t*)set_pin_request_data, sizeof(*set_pin_request_data));
+        should_send_response = true;
+        break;
+    }
+    default:
+        // Handle unknown command or ignore
+        break;
     }
 
     if (should_send_response && sendCanFrame(&response_frame) != HAL_OK) {
@@ -310,40 +336,40 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
 
 static uint8_t fdcanDlcToLength(uint32_t dlc) {
     switch (dlc) {
-        case FDCAN_DLC_BYTES_0:
-            return 0U;
-        case FDCAN_DLC_BYTES_1:
-            return 1U;
-        case FDCAN_DLC_BYTES_2:
-            return 2U;
-        case FDCAN_DLC_BYTES_3:
-            return 3U;
-        case FDCAN_DLC_BYTES_4:
-            return 4U;
-        case FDCAN_DLC_BYTES_5:
-            return 5U;
-        case FDCAN_DLC_BYTES_6:
-            return 6U;
-        case FDCAN_DLC_BYTES_7:
-            return 7U;
-        case FDCAN_DLC_BYTES_8:
-            return 8U;
-        case FDCAN_DLC_BYTES_12:
-            return 12U;
-        case FDCAN_DLC_BYTES_16:
-            return 16U;
-        case FDCAN_DLC_BYTES_20:
-            return 20U;
-        case FDCAN_DLC_BYTES_24:
-            return 24U;
-        case FDCAN_DLC_BYTES_32:
-            return 32U;
-        case FDCAN_DLC_BYTES_48:
-            return 48U;
-        case FDCAN_DLC_BYTES_64:
-            return 64U;
-        default:
-            return 0U;
+    case FDCAN_DLC_BYTES_0:
+        return 0U;
+    case FDCAN_DLC_BYTES_1:
+        return 1U;
+    case FDCAN_DLC_BYTES_2:
+        return 2U;
+    case FDCAN_DLC_BYTES_3:
+        return 3U;
+    case FDCAN_DLC_BYTES_4:
+        return 4U;
+    case FDCAN_DLC_BYTES_5:
+        return 5U;
+    case FDCAN_DLC_BYTES_6:
+        return 6U;
+    case FDCAN_DLC_BYTES_7:
+        return 7U;
+    case FDCAN_DLC_BYTES_8:
+        return 8U;
+    case FDCAN_DLC_BYTES_12:
+        return 12U;
+    case FDCAN_DLC_BYTES_16:
+        return 16U;
+    case FDCAN_DLC_BYTES_20:
+        return 20U;
+    case FDCAN_DLC_BYTES_24:
+        return 24U;
+    case FDCAN_DLC_BYTES_32:
+        return 32U;
+    case FDCAN_DLC_BYTES_48:
+        return 48U;
+    case FDCAN_DLC_BYTES_64:
+        return 64U;
+    default:
+        return 0U;
     }
 }
 
