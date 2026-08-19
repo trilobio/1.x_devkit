@@ -1,5 +1,6 @@
 #ifndef __PROTOCOL_H
 #define __PROTOCOL_H
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,6 +53,9 @@ typedef enum {
     MULTIPLY_RESPONSE = 0x17,
     DIVIDE_REQUEST = 0x18,
     DIVIDE_RESPONSE = 0x19,
+
+    // 62 in decimal. also will be used to set pin mode instead (port, pin, mode,filler)
+    SET_LIGHT_LEVELS = 0x3E,
     // Add more commands as needed
     REBOOT = 0xFF
 } CommandID;
@@ -128,6 +132,29 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint8_t a;
 } DivideResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
+
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+// Actuall set_light_levels fields but
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint8_t port;
+    uint8_t pin;
+    uint8_t mode;
+    uint8_t _filler;
+} SetPinModeResponseData;
 
 /*                                              │
 ────────────────────────────────────────────────┘

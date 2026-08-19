@@ -247,6 +247,19 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
         should_send_response = true;
         break;
     }
+    case SET_LIGHT_LEVELS: {
+        if (data_length != sizeof(SetPinModeRequestData)) {
+            break;
+        }
+        const SetPinModeRequestData* set_pin_request_data = (const SetPinModeRequestData*)rx_data;
+        bool pin_ok = setGpioMode(set_pin_request_data->port, set_pin_request_data->pin,
+                                  set_pin_request_data->mode);
+        id.error_flag = !pin_ok;
+        response_frame = createCanFrame(id, (const uint8_t*)set_pin_request_data,
+                                        sizeof(*set_pin_request_data));
+        should_send_response = true;
+        break;
+    }
     case REBOOT: {
         NVIC_SystemReset();
         break;

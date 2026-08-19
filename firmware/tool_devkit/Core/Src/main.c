@@ -1,48 +1,51 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "fdcan.h"
-#include "icache.h"
 #include "gpio.h"
+#include "icache.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "protocol.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef enum {
-  LED1,
-  LED2,
-  LED3,
+    LED1,
+    LED2,
+    LED3,
 } UserPins;
 
-typedef enum {
-  LOW,
-  HIGH
-} PinState;
+typedef enum { LOW, HIGH } PinState;
 typedef struct {
-  UserPins pin;
-  PinState state;
+    UserPins pin;
+    PinState state;
 } UserPin;
+
+/* Port encoding used on the wire (see SetPinModeRequestData). */
+typedef enum { PORT_A = 0, PORT_B = 1 } GpioPort;
+/* Mode encoding used on the wire. */
+typedef enum { PIN_MODE_INPUT = 0, PIN_MODE_OUTPUT = 1 } GpioMode;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -57,7 +60,7 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+bool valid_pinmode = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,225 +79,268 @@ UserPin led3 = {LED3, LOW};
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
-  /* USER CODE BEGIN 1 */
+    /* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+    /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* MCU Configuration--------------------------------------------------------*/
 
-  /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
+    /* MPU Configuration--------------------------------------------------------*/
+    MPU_Config();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-  /* USER CODE BEGIN Init */
-  /* USER CODE END Init */
+    /* USER CODE BEGIN Init */
+    /* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+    /* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+    /* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_FDCAN2_Init();
-  MX_ICACHE_Init();
-  /* USER CODE BEGIN 2 */
-  CanCommsInit();
-  setGpio(LED1, LOW);
-  setGpio(LED2, HIGH);
-  setGpio(LED3, LOW);
-  /* USER CODE END 2 */
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_FDCAN2_Init();
+    MX_ICACHE_Init();
+    /* USER CODE BEGIN 2 */
+    CanCommsInit();
+    setGpio(LED1, LOW);
+    setGpio(LED2, HIGH);
+    setGpio(LED3, LOW);
+    /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+    while (1) {
+        /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-    
-    if (receivedCanMessage) {
-        handleCanMessage();
+        /* USER CODE BEGIN 3 */
+
+        if (receivedCanMessage) {
+            handleCanMessage();
+        }
+        setGpio(LED1, valid_pinmode ? HIGH : LOW);
+
+        toggleGpio(led2);
+        toggleGpio(led3);
+        HAL_Delay(500);
     }
-    
-    toggleGpio(led1);
-    toggleGpio(led2);
-    toggleGpio(led3);
-    HAL_Delay(500);
-    
-  }
-  /* USER CODE END 3 */
+    /* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+    /** Configure the main internal regulator output voltage
+     */
+    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
-  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+    while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {
+    }
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLL1_SOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 3;
-  RCC_OscInitStruct.PLL.PLLN = 62;
-  RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
-  RCC_OscInitStruct.PLL.PLLR = 2;
-  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_3;
-  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1_VCORANGE_WIDE;
-  RCC_OscInitStruct.PLL.PLLFRACN = 4096;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /** Initializes the RCC Oscillators according to the specified parameters
+     * in the RCC_OscInitTypeDef structure.
+     */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLL1_SOURCE_HSE;
+    RCC_OscInitStruct.PLL.PLLM = 3;
+    RCC_OscInitStruct.PLL.PLLN = 62;
+    RCC_OscInitStruct.PLL.PLLP = 2;
+    RCC_OscInitStruct.PLL.PLLQ = 2;
+    RCC_OscInitStruct.PLL.PLLR = 2;
+    RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_3;
+    RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1_VCORANGE_WIDE;
+    RCC_OscInitStruct.PLL.PLLFRACN = 4096;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        Error_Handler();
+    }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
-                              |RCC_CLOCKTYPE_PCLK3;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV1;
+    /** Initializes the CPU, AHB and APB buses clocks
+     */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 |
+                                  RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_PCLK3;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
+        Error_Handler();
+    }
 
-  /** Configure the programming delay
-  */
-  __HAL_FLASH_SET_PROGRAM_DELAY(FLASH_PROGRAMMING_DELAY_2);
+    /** Configure the programming delay
+     */
+    __HAL_FLASH_SET_PROGRAM_DELAY(FLASH_PROGRAMMING_DELAY_2);
 }
 
 /* USER CODE BEGIN 4 */
 
-void setGpio(UserPins pin, PinState state){
-  GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-  
-  switch(pin) {
-    case LED1:
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, gpioState);
-      break;
-    case LED2:
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, gpioState);
-      break;
-    case LED3:
-      HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, gpioState);
-      break;
+/*
+ * Configure one of the user-accessible pins as a digital input or output.
+ *
+ * port : PORT_A (0) or PORT_B (1)
+ * pin  : pin number within that port (0..15)
+ * mode : PIN_MODE_INPUT (0) or PIN_MODE_OUTPUT (1)
+ *
+ * Only the pins broken out for user use are accepted:
+ *   Port A: PA0-PA4, PA6-PA12   (PA5 is the FDCAN transceiver STBY line,
+ *                                PA13/PA14 are SWD - all excluded)
+ *   Port B: PB0, PB1, PB2, PB6, PB7, PB8
+ * Any other port/pin/mode is rejected and the function returns false.
+ */
+bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
+    GPIO_TypeDef* gpio_port;
+
+    switch (port) {
+    case PORT_A:
+        // PA0-PA4, PA6-PA12 (PA5 reserved for CAN STBY)
+        if (pin > 12U || pin == 5U) {
+            valid_pinmode = false;
+            return false;
+        }
+        gpio_port = GPIOA;
+        break;
+    case PORT_B:
+        // PB0, PB1, PB2, PB6, PB7, PB8
+        if (!(pin <= 2U || (pin >= 6U && pin <= 8U))) {
+            valid_pinmode = false;
+            return false;
+        }
+        gpio_port = GPIOB;
+        break;
     default:
-      // Handle invalid pin if necessary
-      break;
-  }
+        valid_pinmode = false;
+        return false;
+    }
+
+    if (mode != PIN_MODE_INPUT && mode != PIN_MODE_OUTPUT) {
+        valid_pinmode = false;
+        return false;
+    }
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = (uint16_t)(1U << pin);
+    GPIO_InitStruct.Mode = (mode == PIN_MODE_OUTPUT) ? GPIO_MODE_OUTPUT_PP : GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(gpio_port, &GPIO_InitStruct);
+
+    valid_pinmode = true;
+    return true;
+}
+
+void setGpio(UserPins pin, PinState state) {
+    GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    switch (pin) {
+    case LED1:
+        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, gpioState);
+        break;
+    case LED2:
+        HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, gpioState);
+        break;
+    case LED3:
+        HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, gpioState);
+        break;
+    default:
+        // Handle invalid pin if necessary
+        break;
+    }
 }
 void toggleGpio(UserPin pin) {
-  switch(pin.pin) {
+    switch (pin.pin) {
     case LED1:
-      HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-      break;
+        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+        break;
     case LED2:
-      HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-      break;
+        HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+        break;
     case LED3:
-      HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
-      break;
+        HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
+        break;
     default:
-      // Handle invalid pin if necessary
-      break;
-  }
-  // Update the state in the UserPin struct
-  pin.state = (pin.state == HIGH) ? LOW : HIGH;
+        // Handle invalid pin if necessary
+        break;
+    }
+    // Update the state in the UserPin struct
+    pin.state = (pin.state == HIGH) ? LOW : HIGH;
 }
 
 /* USER CODE END 4 */
 
- /* MPU Configuration */
+/* MPU Configuration */
 
-void MPU_Config(void)
-{
-  MPU_Region_InitTypeDef MPU_InitStruct = {0};
-  MPU_Attributes_InitTypeDef MPU_AttributesInit = {0};
+void MPU_Config(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+    MPU_Attributes_InitTypeDef MPU_AttributesInit = {0};
 
-  /* Disables the MPU */
-  HAL_MPU_Disable();
+    /* Disables the MPU */
+    HAL_MPU_Disable();
 
-  /** Initializes and configures the Region 0 and the memory to be protected
-  */
-  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
-  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
-  MPU_InitStruct.BaseAddress = 0x08FFF000;
-  MPU_InitStruct.LimitAddress = 0x08FFFFFF;
-  MPU_InitStruct.AttributesIndex = MPU_ATTRIBUTES_NUMBER0;
-  MPU_InitStruct.AccessPermission = MPU_REGION_ALL_RO;
-  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
-  MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    /** Initializes and configures the Region 0 and the memory to be protected
+     */
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08FFF000;
+    MPU_InitStruct.LimitAddress = 0x08FFFFFF;
+    MPU_InitStruct.AttributesIndex = MPU_ATTRIBUTES_NUMBER0;
+    MPU_InitStruct.AccessPermission = MPU_REGION_ALL_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
 
-  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
-  /** Initializes and configures the Attribute 0 and the memory to be protected
-  */
-  MPU_AttributesInit.Number = MPU_ATTRIBUTES_NUMBER0;
-  MPU_AttributesInit.Attributes = INNER_OUTER(MPU_NOT_CACHEABLE);
+    /** Initializes and configures the Attribute 0 and the memory to be protected
+     */
+    MPU_AttributesInit.Number = MPU_ATTRIBUTES_NUMBER0;
+    MPU_AttributesInit.Attributes = INNER_OUTER(MPU_NOT_CACHEABLE);
 
-  HAL_MPU_ConfigMemoryAttributes(&MPU_AttributesInit);
-  /* Enables the MPU */
-  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
-
+    HAL_MPU_ConfigMemoryAttributes(&MPU_AttributesInit);
+    /* Enables the MPU */
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @param None
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+ * @brief  This function is executed in case of error occurrence.
+ * @param None
+ * @retval None
+ */
+void Error_Handler(void) {
+    /* USER CODE BEGIN Error_Handler_Debug */
+    /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    while (1) {
+    }
+    /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t* file, uint32_t line) {
+    /* USER CODE BEGIN 6 */
+    /* User can add his own implementation to report the file name and line number,
+       ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+    /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
