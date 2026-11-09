@@ -1,0 +1,45 @@
+#!/bin/sh
+# udev PROGRAM helper (see 70-trilo-can.rules): print the deterministic name
+# tcan<bus> for a CAN netdev, keyed by its parent SPI device (%p devpath).
+# Sole home of the per-platform bus layout; per-bus port/bitrate live in the
+# can-bus@N.service drop-ins. Non-zero exit (unknown SoC or SPI device) leaves
+# the kernel name in place. Must stay POSIX sh: runs in early udev event
+# processing, where the can-elegans Python venv is too heavy.
+set -eu
+# pipefail where the shell has it (dash >= 0.5.12 / POSIX 2024); guarded so an
+# older sh doesn't kill the script -- a dead helper would leave every CAN
+# interface un-renamed.
+(set -o pipefail) 2>/dev/null && set -o pipefail
+
+devpath="${1:?usage: can-bus-name <devpath>}"
+
+# Per-board bus table, "<bus-index> <spi-device>" per line. Pi 4 (bcm2711)
+# and Pi 5 Model B both carry the Seeed CAN HAT on the 40-pin header's SPI0
+# (low-bitrate bus 1 on spi0.0, hardware-verified on Pi 4). Other bcm2712
+# boards = CM5 board (3 onboard controllers). The Pi 5 case must come before
+# the bcm2712 one, since a Pi 5 is also bcm2712.
+soc="$(tr -d '\0' < /proc/device-tree/compatible 2>/dev/null || true)"
+case "$soc" in
+	*raspberrypi,5-model-b*|*bcm2711*) map="0 spi0.1
+1 spi0.0" ;;
+	*bcm2712*) map="0 spi0.0
+1 spi1.0
+2 spi1.1" ;;
+	*)
+		echo "can-bus-name: unsupported/unknown SoC ('$soc')" >&2
+		exit 1
+		;;
+esac
+
+# grep exits non-zero on no match; || true so we reach the diagnostic below
+# instead of dying silently under errexit+pipefail.
+spidev="$(printf '%s\n' "$devpath" | grep -oE 'spi[0-9]+\.[0-9]+' | head -n1 || true)"
+[ -n "$spidev" ] || {
+	echo "can-bus-name: no spiX.Y in devpath '$devpath'" >&2
+	exit 1
+}
+
+name="$(printf '%s\n' "$map" | awk -v d="$spidev" '$2 == d { print "tcan" $1; exit }')"
+[ -n "$name" ] || { echo "can-bus-name: $spidev not in bus table for this board" >&2; exit 1; }
+
+printf '%s\n' "$name"

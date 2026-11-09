@@ -1,6 +1,8 @@
 initialize:
     sudo cp /boot/firmware/config.txt /boot/firmware/config.txt.bak
     sudo cp ./raspi/initialization/config.txt /boot/firmware/config.txt
+    sudo install -m 755 ./raspi/initialization/can-bus-name /usr/local/bin/can-bus-name
+    sudo install -m 644 ./raspi/initialization/70-trilo-can.rules /etc/udev/rules.d/70-trilo-can.rules
     sudo cp ./raspi/initialization/can-network.service /etc/systemd/system/can-network.service
     sudo systemctl daemon-reload
     sudo systemctl enable can-network.service

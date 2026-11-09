@@ -1,0 +1,5 @@
+# Rename SPI-attached CAN netdevs to deterministic tcanN names via can-bus-name
+# (kernel canN names depend on probe order). Parent chain must include an SPI
+# device, so eth0/wlan0 never match. On helper failure the interface keeps its
+# kernel name and dependent services fail loudly.
+SUBSYSTEM=="net", ACTION=="add", SUBSYSTEMS=="spi", PROGRAM="/usr/local/bin/can-bus-name %p", NAME="%c"
