@@ -55,6 +55,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode);
+bool readGpio(uint8_t port, uint8_t pin, uint8_t* state);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

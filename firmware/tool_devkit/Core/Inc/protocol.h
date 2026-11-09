@@ -29,6 +29,8 @@ extern "C" {
 #define BOARD_ID_POSITION (CANID_BITS - PRIORITY_SZ - BOARD_ID_SZ)
 
 extern volatile bool receivedCanMessage; // True if CAN message received
+extern uint8_t incoming_data[64];        // Buffer to store incoming data
+extern bool processed_incoming_data;     // False when incoming_data holds a fresh, unhandled message
 
 typedef struct {
     uint8_t priority;
@@ -44,20 +46,11 @@ typedef struct {
 } CanFrame;
 
 typedef enum {
-    PING = 0x02,
-    ADD_REQUEST = 0x12,
-    ADD_RESPONSE = 0x13,
-    SUBTRACT_REQUEST = 0x14,
-    SUBTRACT_RESPONSE = 0x15,
-    MULTIPLY_REQUEST = 0x16,
-    MULTIPLY_RESPONSE = 0x17,
-    DIVIDE_REQUEST = 0x18,
-    DIVIDE_RESPONSE = 0x19,
-
-    // 62 in decimal. also will be used to set pin mode instead (port, pin, mode,filler)
-    SET_LIGHT_LEVELS = 0x3E,
-    // Add more commands as needed
-    REBOOT = 0xFF
+    PING = 2,
+    READ_PROBE = 13,       // reused for reading a GPIO level
+    SET_LIGHT_LEVELS = 62, // reused for setting pin mode
+    ARB_MSG_REQUEST = 63,
+    ARB_MSG_RESPONSE = 65,
 } CommandID;
 
 void CanCommsInit(void);
@@ -69,73 +62,6 @@ HAL_StatusTypeDef sendCanFrame(const CanFrame* frame);
 void handleCanMessage(void);
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs);
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} AddRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} AddResponseData;
-
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} SubtractRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} SubtractResponseData;
-
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} MultiplyRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} MultiplyResponseData;
-/*                                              │
-────────────────────────────────────────────────┘
-*/
-
-/*
-────────────────────────────────────────────────┐
-                                                │
-*/
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-    uint8_t b;
-} DivideRequestData;
-
-typedef struct __attribute__((packed)) {
-    uint8_t a;
-} DivideResponseData;
-
-/*                                              │
-────────────────────────────────────────────────┘
-*/
 
 /*
 ────────────────────────────────────────────────┐
@@ -155,6 +81,42 @@ typedef struct __attribute__((packed)) {
     uint8_t mode;
     uint8_t _filler;
 } SetPinModeResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
+
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+// READ_PROBE carries the port in the upper nibble and the pin index in the
+// lower nibble: selector = (port << 4) | pin.
+//
+// Basically, split one u8 into 2 u4s :D
+typedef struct __attribute__((packed)) {
+    uint8_t selector;
+} ReadProbeRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint8_t state;
+} ReadProbeResponseData;
+
+/*                                              │
+────────────────────────────────────────────────┘
+*/
+
+/*
+────────────────────────────────────────────────┐
+                                                │
+*/
+typedef struct __attribute__((packed)) {
+    uint8_t data[64];
+} ArbitraryMsgRequestData;
+
+typedef struct __attribute__((packed)) {
+    uint64_t a;
+} ArbitraryMsgResponseData;
 
 /*                                              │
 ────────────────────────────────────────────────┘

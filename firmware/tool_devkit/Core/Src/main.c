@@ -30,20 +30,21 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+// Port encoding used on the wire. GPIO pins are addressed by their STM32
+// port/pin number; LEDs are exposed as a separate zero-based port.
 typedef enum {
-    LED1,
-    LED2,
-    LED3,
-} UserPins;
+    PORT_A = 0,
+    PORT_B = 1,
+    PORT_LEDS = 2,
+} GpioPort;
 
-typedef enum { LOW, HIGH } PinState;
-typedef struct {
-    UserPins pin;
-    PinState state;
-} UserPin;
+// LED ids are zero-indexed to match the public API (pin 0 -> LED1).
+typedef enum {
+    LED1 = 0,
+    LED2 = 1,
+    LED3 = 2,
+} UserLeds;
 
-/* Port encoding used on the wire (see SetPinModeRequestData). */
-typedef enum { PORT_A = 0, PORT_B = 1 } GpioPort;
 /* Mode encoding used on the wire. */
 typedef enum { PIN_MODE_INPUT = 0, PIN_MODE_OUTPUT = 1 } GpioMode;
 /* USER CODE END PTD */
@@ -60,22 +61,30 @@ typedef enum { PIN_MODE_INPUT = 0, PIN_MODE_OUTPUT = 1 } GpioMode;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-bool valid_pinmode = true;
+// Only these GPIO pins are exposed for user control. Reserved pins are excluded
+// here so the same validation is used for reads, writes, and mode changes.
+static const uint16_t user_pin_masks[] = {
+    [PORT_A] = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_6 |
+               GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12,
+    [PORT_B] = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8,
+};
+
+uint8_t incoming_data[64];
+bool processed_incoming_data = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
-void setGpio(UserPins pin, PinState state);
-void toggleGpio(UserPin pin);
+static void setGpio(UserLeds pin, GPIO_PinState state);
+static bool resolveUserPin(uint8_t port, uint8_t pin, GPIO_TypeDef** gpio_port,
+                           uint16_t* gpio_pin);
+static void applyPinCommand(uint8_t port, uint8_t pin, uint8_t state_byte);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-UserPin led1 = {LED1, LOW};
-UserPin led2 = {LED2, LOW};
-UserPin led3 = {LED3, LOW};
 /* USER CODE END 0 */
 
 /**
@@ -112,9 +121,9 @@ int main(void) {
     MX_ICACHE_Init();
     /* USER CODE BEGIN 2 */
     CanCommsInit();
-    setGpio(LED1, LOW);
-    setGpio(LED2, HIGH);
-    setGpio(LED3, LOW);
+    setGpio(LED1, GPIO_PIN_RESET);
+    setGpio(LED2, GPIO_PIN_SET);
+    setGpio(LED3, GPIO_PIN_RESET);
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -127,11 +136,16 @@ int main(void) {
         if (receivedCanMessage) {
             handleCanMessage();
         }
-        setGpio(LED1, valid_pinmode ? HIGH : LOW);
 
-        toggleGpio(led2);
-        toggleGpio(led3);
-        HAL_Delay(500);
+        if (!processed_incoming_data) {
+            // incoming_data[0] = port (0=GPIOA, 1=GPIOB, 2=LEDs)
+            // incoming_data[1] = pin within the port (LED pins are 0-based)
+            // incoming_data[2] = state (0 = LOW, non-zero = HIGH)
+            applyPinCommand(incoming_data[0], incoming_data[1], incoming_data[2]);
+            processed_incoming_data = true;
+        }
+
+        // Sleep until the next interrupt (CAN RX or SysTick) instead of busy-waiting.
     }
     /* USER CODE END 3 */
 }
@@ -191,95 +205,109 @@ void SystemClock_Config(void) {
 
 /* USER CODE BEGIN 4 */
 
-/*
- * Configure one of the user-accessible pins as a digital input or output.
- *
- * port : PORT_A (0) or PORT_B (1)
- * pin  : pin number within that port (0..15)
- * mode : PIN_MODE_INPUT (0) or PIN_MODE_OUTPUT (1)
- *
- * Only the pins broken out for user use are accepted:
- *   Port A: PA0-PA4, PA6-PA12   (PA5 is the FDCAN transceiver STBY line,
- *                                PA13/PA14 are SWD - all excluded)
- *   Port B: PB0, PB1, PB2, PB6, PB7, PB8
- * Any other port/pin/mode is rejected and the function returns false.
- */
-bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
-    GPIO_TypeDef* gpio_port;
-
-    switch (port) {
-    case PORT_A:
-        // PA0-PA4, PA6-PA12 (PA5 reserved for CAN STBY)
-        if (pin > 12U || pin == 5U) {
-            valid_pinmode = false;
-            return false;
-        }
-        gpio_port = GPIOA;
+static void setGpio(UserLeds pin, GPIO_PinState state) {
+    switch (pin) {
+    case LED1:
+        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, state);
         break;
-    case PORT_B:
-        // PB0, PB1, PB2, PB6, PB7, PB8
-        if (!(pin <= 2U || (pin >= 6U && pin <= 8U))) {
-            valid_pinmode = false;
-            return false;
-        }
-        gpio_port = GPIOB;
+    case LED2:
+        HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, state);
+        break;
+    case LED3:
+        HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, state);
         break;
     default:
-        valid_pinmode = false;
+        // Handle invalid pin if necessary
+        break;
+    }
+}
+
+static bool resolveUserPin(uint8_t port, uint8_t pin, GPIO_TypeDef** gpio_port,
+                           uint16_t* gpio_pin) {
+    if (gpio_port == NULL || gpio_pin == NULL || port > PORT_B || pin >= 16U) {
         return false;
     }
 
+    uint16_t candidate = (uint16_t)(1U << pin);
+    if ((user_pin_masks[port] & candidate) == 0U) {
+        return false;
+    }
+
+    *gpio_port = (port == PORT_A) ? GPIOA : GPIOB;
+    *gpio_pin = candidate;
+    return true;
+}
+
+bool readGpio(uint8_t port, uint8_t pin, uint8_t* state) {
+    if (state == NULL) {
+        return false;
+    }
+
+    GPIO_TypeDef* gpio_port;
+    uint16_t gpio_pin;
+    if (!resolveUserPin(port, pin, &gpio_port, &gpio_pin)) {
+        return false;
+    }
+
+    *state = (HAL_GPIO_ReadPin(gpio_port, gpio_pin) == GPIO_PIN_SET) ? 1U : 0U;
+    return true;
+}
+
+bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
     if (mode != PIN_MODE_INPUT && mode != PIN_MODE_OUTPUT) {
-        valid_pinmode = false;
+        return false;
+    }
+
+    GPIO_TypeDef* gpio_port;
+    uint16_t gpio_pin;
+    if (!resolveUserPin(port, pin, &gpio_port, &gpio_pin)) {
         return false;
     }
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = (uint16_t)(1U << pin);
+    GPIO_InitStruct.Pin = gpio_pin;
     GPIO_InitStruct.Mode = (mode == PIN_MODE_OUTPUT) ? GPIO_MODE_OUTPUT_PP : GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(gpio_port, &GPIO_InitStruct);
-
-    valid_pinmode = true;
     return true;
 }
 
-void setGpio(UserPins pin, PinState state) {
-    GPIO_PinState gpioState = (state == HIGH) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+// Apply a single pin command decoded from an incoming CAN message.
+//   port       -> GpioPort (0 = GPIOA, 1 = GPIOB, 2 = LEDs)
+//   pin        -> pin number within the port (LEDs are 0-indexed)
+//   state_byte -> 0 drives the pin LOW, any other value drives it HIGH
+// GPIO pins not present in user_pin_masks are ignored so a bad request cannot
+// disturb reserved pins (CAN standby, SWD, etc.).
+static void applyPinCommand(uint8_t port, uint8_t pin, uint8_t state_byte) {
+    GPIO_PinState gpio_state = state_byte ? GPIO_PIN_SET : GPIO_PIN_RESET;
 
-    switch (pin) {
-    case LED1:
-        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, gpioState);
+    switch (port) {
+    case PORT_LEDS:
+        switch ((UserLeds)pin) {
+        case LED1:
+        case LED2:
+        case LED3:
+            setGpio((UserLeds)pin, gpio_state);
+            break;
+        default:
+            break;
+        }
         break;
-    case LED2:
-        HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, gpioState);
-        break;
-    case LED3:
-        HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, gpioState);
-        break;
-    default:
-        // Handle invalid pin if necessary
-        break;
-    }
-}
-void toggleGpio(UserPin pin) {
-    switch (pin.pin) {
-    case LED1:
-        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-        break;
-    case LED2:
-        HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-        break;
-    case LED3:
-        HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
-        break;
-    default:
-        // Handle invalid pin if necessary
+
+    case PORT_A:
+    case PORT_B: {
+        GPIO_TypeDef* gpio_port;
+        uint16_t gpio_pin;
+        if (resolveUserPin(port, pin, &gpio_port, &gpio_pin)) {
+            HAL_GPIO_WritePin(gpio_port, gpio_pin, gpio_state);
+        }
         break;
     }
-    // Update the state in the UserPin struct
-    pin.state = (pin.state == HIGH) ? LOW : HIGH;
+
+    default:
+        break;
+    }
 }
 
 /* USER CODE END 4 */
