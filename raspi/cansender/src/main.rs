@@ -11,7 +11,7 @@ use trilo::*;
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long, default_value = "can1")]
+    #[arg(short, long, default_value = "tcan1")]
     interface: String,
 
     #[arg(long, default_value = "3")]

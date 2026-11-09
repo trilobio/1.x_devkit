@@ -9,8 +9,8 @@ initialize:
     @echo "Run: sudo reboot"
 
 check-can:
-    ip link show can0
-    ip link show can1
+    ip link show tcan0
+    ip link show tcan1
     systemctl --no-pager status can-network.service
 
 init-cmake:
