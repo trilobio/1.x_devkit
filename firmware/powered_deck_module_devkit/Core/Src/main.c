@@ -60,8 +60,6 @@ typedef enum { PIN_MODE_INPUT = 0, PIN_MODE_OUTPUT = 1 } GpioMode;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-bool valid_pinmode = true;
-
 // Only these GPIO pins are exposed for user control. Reserved pins are excluded
 // here so the same validation is used for both pin writes and mode changes.
 static const uint16_t user_pin_masks[] = {
@@ -72,7 +70,7 @@ static const uint16_t user_pin_masks[] = {
 };
 
 uint8_t incoming_data[64];
-bool processed_incoming_data = false;
+bool processed_incoming_data = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -226,7 +224,7 @@ static void setGpio(UserLeds pin, GPIO_PinState state) {
 }
 
 bool readGpio(uint8_t port, uint8_t pin, uint8_t* state) {
-    if (state == 0) {
+    if (state == NULL) {
         return false;
     }
 
@@ -242,7 +240,7 @@ bool readGpio(uint8_t port, uint8_t pin, uint8_t* state) {
 
 static bool resolveUserPin(uint8_t port, uint8_t pin, GPIO_TypeDef** gpio_port,
                            uint16_t* gpio_pin) {
-    if (port > PORT_B || pin >= 16U) {
+    if (gpio_port == NULL || gpio_pin == NULL || port > PORT_B || pin >= 16U) {
         return false;
     }
 
@@ -258,14 +256,12 @@ static bool resolveUserPin(uint8_t port, uint8_t pin, GPIO_TypeDef** gpio_port,
 
 bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
     if (mode != PIN_MODE_INPUT && mode != PIN_MODE_OUTPUT) {
-        valid_pinmode = false;
         return false;
     }
 
     GPIO_TypeDef* gpio_port;
     uint16_t gpio_pin;
     if (!resolveUserPin(port, pin, &gpio_port, &gpio_pin)) {
-        valid_pinmode = false;
         return false;
     }
 
@@ -275,8 +271,6 @@ bool setGpioMode(uint8_t port, uint8_t pin, uint8_t mode) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(gpio_port, &GPIO_InitStruct);
-
-    valid_pinmode = true;
     return true;
 }
 // Apply a single pin command decoded from an incoming CAN message.

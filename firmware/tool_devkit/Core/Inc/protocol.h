@@ -8,7 +8,9 @@ extern "C" {
 #include "stm32h5xx_hal.h"
 #include <stdbool.h>
 
+#ifndef BOARD_ID
 #define BOARD_ID 201
+#endif
 #define ALL_CALL_ID 0x000
 /*
  *    Priority : Board ID : Command ID : Request ID : Error

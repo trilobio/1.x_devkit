@@ -124,6 +124,15 @@ int main(void) {
     setGpio(LED1, GPIO_PIN_RESET);
     setGpio(LED2, GPIO_PIN_SET);
     setGpio(LED3, GPIO_PIN_RESET);
+
+    // Start every user pin as a LOW output so writes work without a prior mode
+    // command, matching the powered deck module devkit.
+    for (uint8_t port = PORT_A; port <= PORT_B; port++) {
+        for (uint8_t pin = 0U; pin < 16U; pin++) {
+            applyPinCommand(port, pin, 0U);
+            setGpioMode(port, pin, PIN_MODE_OUTPUT);
+        }
+    }
     /* USER CODE END 2 */
 
     /* Infinite loop */

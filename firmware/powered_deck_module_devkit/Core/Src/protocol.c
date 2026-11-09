@@ -258,6 +258,9 @@ static void processCanFrame(const FDCAN_RxHeaderTypeDef* rx_header, const uint8_
     case ARB_MSG_REQUEST: {
         if (!tunnel.filling) {
             // First frame is the header carrying the payload size.
+            if (data_length < 13U) {
+                break;
+            }
             unpackTunnelHeader(rx_data, &tunnel.num_bytes, &tunnel.num_floats);
             if (tunnel.num_bytes > sizeof(tunnel.buffer)) {
                 tunnel.num_bytes = sizeof(tunnel.buffer); // Clamp to the devkit buffer
